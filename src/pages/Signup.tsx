@@ -133,66 +133,91 @@ const Signup = () => {
 
     setLoading(true);
     try {
-      await signUp(email, password, fullName);
+      const signUpData = await signUp(email, password, fullName);
+      const userId = signUpData?.user?.id;
+      if (!userId) throw new Error('Signup failed - no user ID returned');
 
-      // Get the session after signup
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        // Try to sign in since email confirmation may be disabled
-        await supabase.auth.signInWithPassword({ email, password });
-        const { data: { session: newSession } } = await supabase.auth.getSession();
-        if (!newSession) throw new Error('Could not authenticate');
+      // Try to get a session (works if email confirmation is disabled)
+      let hasSession = !!signUpData?.session;
+      if (!hasSession) {
+        // Try signing in (works if email confirmation is disabled)
+        try {
+          await supabase.auth.signInWithPassword({ email, password });
+          const { data: { session } } = await supabase.auth.getSession();
+          hasSession = !!session;
+        } catch {
+          // Email confirmation likely required - continue with service-level uploads
+        }
       }
 
-      const userId = (await supabase.auth.getSession()).data.session?.user.id;
-      if (!userId) throw new Error('No user ID');
-
-      // Update phone in profile
-      if (phone) {
+      // Update phone in profile (may fail without session, that's ok)
+      if (phone && hasSession) {
         await supabase.from('profiles').update({ phone }).eq('user_id', userId);
       }
 
       if (role === 'driver') {
-        // Upload all documents
-        const [idFrontUrl, idBackUrl, drivingLicenseUrl, carLicenseUrl, criminalRecordUrl] = await Promise.all([
-          uploadFile(userId, idFront!.file, 'id_front'),
-          uploadFile(userId, idBack!.file, 'id_back'),
-          uploadFile(userId, drivingLicense!.file, 'driving_license'),
-          uploadFile(userId, carLicense!.file, 'car_license'),
-          uploadFile(userId, criminalRecord!.file, 'criminal_record'),
-        ]);
+        if (hasSession) {
+          // Upload all documents (requires auth)
+          const [idFrontUrl, idBackUrl, drivingLicenseUrl, carLicenseUrl, criminalRecordUrl] = await Promise.all([
+            uploadFile(userId, idFront!.file, 'id_front'),
+            uploadFile(userId, idBack!.file, 'id_back'),
+            uploadFile(userId, drivingLicense!.file, 'driving_license'),
+            uploadFile(userId, carLicense!.file, 'car_license'),
+            uploadFile(userId, criminalRecord!.file, 'criminal_record'),
+          ]);
 
-        let uberProofUrl = null;
-        if (wasUber && uberProof) {
-          uberProofUrl = await uploadFile(userId, uberProof.file, 'uber_proof');
+          let uberProofUrl = null;
+          if (wasUber && uberProof) {
+            uberProofUrl = await uploadFile(userId, uberProof.file, 'uber_proof');
+          }
+
+          await supabase.from('driver_applications').insert({
+            user_id: userId,
+            license_number: 'See uploaded documents',
+            vehicle_model: lang === 'ar' ? 'في انتظار المراجعة' : 'Pending review',
+            vehicle_plate: 'See uploaded documents',
+            vehicle_year: new Date().getFullYear(),
+            phone,
+            id_front_url: idFrontUrl,
+            id_back_url: idBackUrl,
+            driving_license_url: drivingLicenseUrl,
+            car_license_url: carLicenseUrl,
+            criminal_record_url: criminalRecordUrl,
+            was_uber_driver: wasUber,
+            uber_proof_url: uberProofUrl,
+            notes: wasUber
+              ? (lang === 'ar' ? 'سائق أوبر سابق - أولوية في المراجعة' : 'Former Uber driver - priority review')
+              : null,
+          });
+
+          toast({
+            title: lang === 'ar' ? 'تم إرسال طلبك!' : 'Application Submitted!',
+            description: lang === 'ar'
+              ? 'سيراجع الأدمن طلبك وسيتم إبلاغك بالقبول'
+              : 'Admin will review your documents and notify you of acceptance',
+          });
+        } else {
+          // No session - email confirmation required
+          toast({
+            title: lang === 'ar' ? 'تم إنشاء حسابك!' : 'Account Created!',
+            description: lang === 'ar'
+              ? 'يرجى تأكيد بريدك الإلكتروني ثم سجل الدخول لرفع مستنداتك كسائق'
+              : 'Please confirm your email, then log in to upload your driver documents',
+          });
+          navigate('/login');
+          return;
         }
-
-        await supabase.from('driver_applications').insert({
-          user_id: userId,
-          license_number: 'See uploaded documents',
-          vehicle_model: lang === 'ar' ? 'في انتظار المراجعة' : 'Pending review',
-          vehicle_plate: 'See uploaded documents',
-          vehicle_year: new Date().getFullYear(),
-          phone,
-          id_front_url: idFrontUrl,
-          id_back_url: idBackUrl,
-          driving_license_url: drivingLicenseUrl,
-          car_license_url: carLicenseUrl,
-          criminal_record_url: criminalRecordUrl,
-          was_uber_driver: wasUber,
-          uber_proof_url: uberProofUrl,
-          notes: wasUber
-            ? (lang === 'ar' ? 'سائق أوبر سابق - أولوية في المراجعة' : 'Former Uber driver - priority review')
-            : null,
-        });
-
-        toast({
-          title: lang === 'ar' ? 'تم إرسال طلبك!' : 'Application Submitted!',
-          description: lang === 'ar'
-            ? 'سيراجع الأدمن طلبك وسيتم إبلاغك بالقبول'
-            : 'Admin will review your documents and notify you of acceptance',
-        });
       } else {
+        if (!hasSession) {
+          toast({
+            title: lang === 'ar' ? 'تم إنشاء حسابك!' : 'Account Created!',
+            description: lang === 'ar'
+              ? 'يرجى تأكيد بريدك الإلكتروني ثم سجل الدخول'
+              : 'Please confirm your email, then log in',
+          });
+          navigate('/login');
+          return;
+        }
         toast({
           title: t('auth.success'),
           description: lang === 'ar' ? 'تم إنشاء حسابك بنجاح' : 'Account created successfully',
