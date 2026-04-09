@@ -56,7 +56,6 @@ const MapView = ({
     }
   }, [origin, destination, showDirections]);
 
-  // Recalculate directions when origin/destination change
   useEffect(() => {
     if (!isLoaded || !showDirections || !origin || !destination) {
       setDirections(null);
@@ -128,7 +127,8 @@ const MapView = ({
           zoomControl: true,
           mapTypeControl: false,
           streetViewControl: false,
-          fullscreenControl: true,
+          fullscreenControl: false,
+          gestureHandling: 'greedy',
         }}
       >
         {markers.map((marker, i) => (
@@ -163,8 +163,11 @@ const MapView = ({
         <Button
           variant="secondary"
           size="icon"
-          className="absolute bottom-4 end-4 z-10 shadow-lg bg-card hover:bg-muted rounded-full w-10 h-10"
-          onClick={locateUser}
+          className="absolute bottom-4 end-4 z-[5] shadow-lg bg-card hover:bg-muted rounded-full w-10 h-10"
+          onClick={(e) => {
+            e.stopPropagation();
+            locateUser();
+          }}
           disabled={locating}
         >
           {locating ? <Loader2 className="w-5 h-5 animate-spin" /> : <LocateFixed className="w-5 h-5" />}
