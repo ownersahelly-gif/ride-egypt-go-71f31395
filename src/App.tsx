@@ -44,6 +44,8 @@ const App = () => (
               <Route path="/driver-dashboard" element={<ProtectedRoute><DriverDashboard /></ProtectedRoute>} />
               <Route path="/track" element={<ProtectedRoute><TrackShuttle /></ProtectedRoute>} />
               <Route path="/active-ride" element={<ProtectedRoute><ActiveRide /></ProtectedRoute>} />
+              <Route path="/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
+              <Route path="*" element={<NotFound />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
