@@ -216,6 +216,14 @@ const DriverDashboard = () => {
                       <XCircle className="w-4 h-4 me-1" />{t('driverDash.goOffline')}
                     </Button>
                   </div>
+                  {shuttle.status === 'active' && todayBookings.length > 0 && (
+                    <Link to="/active-ride" className="mt-3 block">
+                      <Button className="w-full" size="lg">
+                        <Play className="w-5 h-5 me-2" />
+                        {lang === 'ar' ? 'بدء الرحلة' : 'Start Ride'}
+                      </Button>
+                    </Link>
+                  )}
                 </div>
 
                 {/* Today's trips */}
