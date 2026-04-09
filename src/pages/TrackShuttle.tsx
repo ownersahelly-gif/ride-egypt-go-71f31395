@@ -349,16 +349,30 @@ const TrackShuttle = () => {
 
       {/* Map */}
       <div className="flex-1 relative">
-        <MapView
-          className="h-full min-h-[350px]"
-          markers={markers}
-          origin={route ? { lat: route.origin_lat, lng: route.origin_lng } : undefined}
-          destination={route ? { lat: route.destination_lat, lng: route.destination_lng } : undefined}
-          showDirections={!!route}
-          center={shuttle?.current_lat ? { lat: shuttle.current_lat, lng: shuttle.current_lng } : undefined}
-          zoom={14}
-          showUserLocation
-        />
+        {(!shuttle?.current_lat || !shuttle?.current_lng) && !loading ? (
+          <div className="h-full min-h-[350px] bg-muted flex flex-col items-center justify-center text-center p-6">
+            <Car className="w-16 h-16 text-muted-foreground/40 mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">
+              {lang === 'ar' ? 'الرحلة لم تبدأ بعد' : 'Ride hasn\'t started yet'}
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              {lang === 'ar'
+                ? 'سيظهر الموقع المباشر للشاتل هنا عندما يبدأ السائق الرحلة'
+                : 'The live shuttle location will appear here once the driver starts the ride'}
+            </p>
+          </div>
+        ) : (
+          <MapView
+            className="h-full min-h-[350px]"
+            markers={markers}
+            origin={route ? { lat: route.origin_lat, lng: route.origin_lng } : undefined}
+            destination={route ? { lat: route.destination_lat, lng: route.destination_lng } : undefined}
+            showDirections={!!route}
+            center={shuttle?.current_lat ? { lat: shuttle.current_lat, lng: shuttle.current_lng } : undefined}
+            zoom={14}
+            showUserLocation
+          />
+        )}
 
         {/* ETA Floating Card */}
         {booking && !loading && (
