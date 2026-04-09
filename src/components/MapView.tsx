@@ -163,7 +163,7 @@ const MapView = ({
         <Button
           variant="secondary"
           size="icon"
-          className="absolute bottom-4 end-4 z-[5] shadow-lg bg-card hover:bg-muted rounded-full w-10 h-10"
+          className="absolute bottom-20 end-3 z-[5] shadow-lg bg-card hover:bg-muted rounded-full w-10 h-10"
           onClick={(e) => {
             e.stopPropagation();
             locateUser();

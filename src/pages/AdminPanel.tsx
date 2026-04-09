@@ -282,21 +282,35 @@ const AdminPanel = () => {
                     <Label>Destination (AR)</Label>
                     <Input value={routeForm.destination_name_ar} onChange={e => setRouteForm(p => ({ ...p, destination_name_ar: e.target.value }))} />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Origin Lat</Label>
-                    <Input type="number" step="0.0001" value={routeForm.origin_lat} onChange={e => setRouteForm(p => ({ ...p, origin_lat: parseFloat(e.target.value) }))} />
+                  <div className="sm:col-span-2 space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-green-500" />
+                      {lang === 'ar' ? 'نقطة الانطلاق (انقر على الخريطة)' : 'Origin (click on map)'}
+                    </Label>
+                    <MapView
+                      className="h-[200px]"
+                      center={{ lat: routeForm.origin_lat, lng: routeForm.origin_lng }}
+                      zoom={12}
+                      markers={[{ lat: routeForm.origin_lat, lng: routeForm.origin_lng, label: 'A', color: 'green' }]}
+                      onMapClick={(lat, lng) => setRouteForm(p => ({ ...p, origin_lat: parseFloat(lat.toFixed(6)), origin_lng: parseFloat(lng.toFixed(6)) }))}
+                      showUserLocation={false}
+                    />
+                    <p className="text-xs text-muted-foreground">{routeForm.origin_lat.toFixed(4)}, {routeForm.origin_lng.toFixed(4)}</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Origin Lng</Label>
-                    <Input type="number" step="0.0001" value={routeForm.origin_lng} onChange={e => setRouteForm(p => ({ ...p, origin_lng: parseFloat(e.target.value) }))} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Destination Lat</Label>
-                    <Input type="number" step="0.0001" value={routeForm.destination_lat} onChange={e => setRouteForm(p => ({ ...p, destination_lat: parseFloat(e.target.value) }))} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Destination Lng</Label>
-                    <Input type="number" step="0.0001" value={routeForm.destination_lng} onChange={e => setRouteForm(p => ({ ...p, destination_lng: parseFloat(e.target.value) }))} />
+                  <div className="sm:col-span-2 space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-destructive" />
+                      {lang === 'ar' ? 'نقطة الوصول (انقر على الخريطة)' : 'Destination (click on map)'}
+                    </Label>
+                    <MapView
+                      className="h-[200px]"
+                      center={{ lat: routeForm.destination_lat, lng: routeForm.destination_lng }}
+                      zoom={12}
+                      markers={[{ lat: routeForm.destination_lat, lng: routeForm.destination_lng, label: 'B', color: 'red' }]}
+                      onMapClick={(lat, lng) => setRouteForm(p => ({ ...p, destination_lat: parseFloat(lat.toFixed(6)), destination_lng: parseFloat(lng.toFixed(6)) }))}
+                      showUserLocation={false}
+                    />
+                    <p className="text-xs text-muted-foreground">{routeForm.destination_lat.toFixed(4)}, {routeForm.destination_lng.toFixed(4)}</p>
                   </div>
                   <div className="space-y-2">
                     <Label>Price (EGP)</Label>
