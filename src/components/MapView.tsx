@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LocateFixed } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
@@ -17,10 +18,24 @@ interface MapViewProps {
   zoom?: number;
   className?: string;
   onMapClick?: (lat: number, lng: number) => void;
+  showUserLocation?: boolean;
 }
 
-const MapView = ({ markers = [], origin, destination, showDirections = false, center, zoom = 12, className = '', onMapClick }: MapViewProps) => {
+const MapView = ({
+  markers = [],
+  origin,
+  destination,
+  showDirections = false,
+  center,
+  zoom = 12,
+  className = '',
+  onMapClick,
+  showUserLocation = true,
+}: MapViewProps) => {
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
+  const [locating, setLocating] = useState(false);
 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_KEY,
@@ -28,6 +43,7 @@ const MapView = ({ markers = [], origin, destination, showDirections = false, ce
   });
 
   const onLoad = useCallback((map: google.maps.Map) => {
+    setMapRef(map);
     if (showDirections && origin && destination) {
       const directionsService = new google.maps.DirectionsService();
       directionsService.route({
@@ -39,6 +55,38 @@ const MapView = ({ markers = [], origin, destination, showDirections = false, ce
       });
     }
   }, [origin, destination, showDirections]);
+
+  // Recalculate directions when origin/destination change
+  useEffect(() => {
+    if (!isLoaded || !showDirections || !origin || !destination) {
+      setDirections(null);
+      return;
+    }
+    const directionsService = new google.maps.DirectionsService();
+    directionsService.route({
+      origin,
+      destination,
+      travelMode: google.maps.TravelMode.DRIVING,
+    }, (result, status) => {
+      if (status === 'OK' && result) setDirections(result);
+    });
+  }, [isLoaded, origin?.lat, origin?.lng, destination?.lat, destination?.lng, showDirections]);
+
+  const locateUser = () => {
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserLocation(loc);
+        mapRef?.panTo(loc);
+        mapRef?.setZoom(15);
+        setLocating(false);
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   if (!GOOGLE_MAPS_KEY) {
     return (
@@ -68,7 +116,7 @@ const MapView = ({ markers = [], origin, destination, showDirections = false, ce
   }
 
   return (
-    <div className={`rounded-xl overflow-hidden ${className}`}>
+    <div className={`rounded-xl overflow-hidden relative ${className}`}>
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={center || cairoCenter}
@@ -88,10 +136,40 @@ const MapView = ({ markers = [], origin, destination, showDirections = false, ce
             key={i}
             position={{ lat: marker.lat, lng: marker.lng }}
             label={marker.label}
+            icon={marker.color === 'blue' ? {
+              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#3B82F6" stroke="white" stroke-width="3"/><text x="20" y="26" text-anchor="middle" fill="white" font-size="18">🚐</text></svg>'
+              ),
+              scaledSize: new google.maps.Size(40, 40),
+            } : undefined}
           />
         ))}
+        {userLocation && (
+          <Marker
+            position={userLocation}
+            icon={{
+              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#4285F4" stroke="white" stroke-width="3"/><circle cx="12" cy="12" r="4" fill="white"/></svg>'
+              ),
+              scaledSize: new google.maps.Size(24, 24),
+            }}
+            title="Your location"
+          />
+        )}
         {directions && <DirectionsRenderer directions={directions} />}
       </GoogleMap>
+
+      {showUserLocation && (
+        <Button
+          variant="secondary"
+          size="icon"
+          className="absolute bottom-4 end-4 z-10 shadow-lg bg-card hover:bg-muted rounded-full w-10 h-10"
+          onClick={locateUser}
+          disabled={locating}
+        >
+          {locating ? <Loader2 className="w-5 h-5 animate-spin" /> : <LocateFixed className="w-5 h-5" />}
+        </Button>
+      )}
     </div>
   );
 };
