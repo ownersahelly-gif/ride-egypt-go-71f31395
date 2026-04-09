@@ -211,6 +211,27 @@ const ActiveRide = () => {
     toast({ title: lang === 'ar' ? 'تم الإنزال ✓' : 'Dropped Off ✓' });
   };
 
+  const completeRide = async () => {
+    const boardedBookings = bookings.filter(b => b.status === 'boarded');
+    if (boardedBookings.length === 0) return;
+    const now = new Date().toISOString();
+    const promises = boardedBookings.map(b =>
+      supabase.from('bookings').update({ status: 'completed', dropped_off_at: now }).eq('id', b.id)
+    );
+    const results = await Promise.all(promises);
+    const hasError = results.some(r => r.error);
+    if (hasError) {
+      toast({ title: t('auth.error'), description: lang === 'ar' ? 'حدث خطأ' : 'Something went wrong', variant: 'destructive' });
+      return;
+    }
+    // Also set shuttle to inactive
+    if (shuttle?.id) {
+      await supabase.from('shuttles').update({ status: 'inactive' }).eq('id', shuttle.id);
+    }
+    setBookings(prev => prev.map(b => b.status === 'boarded' ? { ...b, status: 'completed', dropped_off_at: now } : b));
+    toast({ title: lang === 'ar' ? 'تم إنهاء الرحلة ✓' : 'Ride completed! ✓' });
+  };
+
   // Build markers
   const markers: { lat: number; lng: number; label?: string; color?: 'red' | 'green' | 'blue' }[] = [];
   if (route) {
@@ -228,7 +249,10 @@ const ActiveRide = () => {
 
   const pickupStops = orderedStops.filter(s => s.type === 'pickup');
   const dropoffStops = orderedStops.filter(s => s.type === 'dropoff');
-  const allBoarded = bookings.length > 0 && bookings.every(b => b.status === 'boarded');
+  const boardedCount = bookings.filter(b => b.status === 'boarded').length;
+  const totalCount = bookings.length;
+  const allBoarded = totalCount > 0 && bookings.every(b => b.status === 'boarded');
+  const allCompleted = totalCount > 0 && bookings.every(b => b.status === 'completed');
 
   if (loading) {
     return (
