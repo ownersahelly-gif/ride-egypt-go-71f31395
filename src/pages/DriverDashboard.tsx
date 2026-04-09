@@ -250,7 +250,7 @@ const DriverDashboard = () => {
                     { icon: Users, value: shuttle.capacity, label: t('driverDash.capacity'), bg: 'bg-primary/10', color: 'text-primary' },
                   ].map((s, i) => (
                     <div key={i} className="bg-card border border-border rounded-xl p-5">
-                      <div className="w-10 h-10 rounded-lg mb-2 flex items-center justify-center" style={{}} className={`w-10 h-10 rounded-lg mb-2 flex items-center justify-center ${s.bg}`}>
+                      <div className={`w-10 h-10 rounded-lg mb-2 flex items-center justify-center ${s.bg}`}>
                         <s.icon className={`w-5 h-5 ${s.color}`} />
                       </div>
                       <p className="text-2xl font-bold text-foreground">{s.value}</p>
@@ -460,7 +460,7 @@ const DriverDashboard = () => {
                           {lang === 'ar' ? schedules[0]?.routes?.name_ar : schedules[0]?.routes?.name_en}
                         </h4>
                         <div className="flex flex-wrap gap-2">
-                          {schedules.sort((a: any, b: any) => a.day_of_week - b.day_of_week).map((s: any) => (
+                          {(schedules as any[]).sort((a: any, b: any) => a.day_of_week - b.day_of_week).map((s: any) => (
                             <div key={s.id} className="flex items-center gap-2 bg-surface rounded-lg px-3 py-2">
                               <span className="text-sm font-medium text-foreground">{dayNames[s.day_of_week]}</span>
                               <span className="text-xs text-muted-foreground">{s.departure_time?.slice(0, 5)}</span>
