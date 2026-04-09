@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { MapPin, Clock, Ticket, ChevronLeft, ChevronRight, MessageCircle, Navigation, Key, Star, Share2 } from 'lucide-react';
+import { MapPin, Clock, Ticket, ChevronLeft, ChevronRight, MessageCircle, Navigation, Key, Star, Share2, Phone, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import RideChat from '@/components/RideChat';
 import RideRating from '@/components/RideRating';
@@ -19,17 +19,28 @@ const MyBookings = () => {
   const [chatBookingId, setChatBookingId] = useState<string | null>(null);
   const [ratingBooking, setRatingBooking] = useState<any>(null);
   const [ratedBookingIds, setRatedBookingIds] = useState<Set<string>>(new Set());
+  const [driverProfiles, setDriverProfiles] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (!user) return;
     const fetchBookings = async () => {
       const [{ data: bookingsData }, { data: ratingsData }] = await Promise.all([
-        supabase.from('bookings').select('*, routes(*), shuttles(driver_id)').eq('user_id', user.id)
+        supabase.from('bookings').select('*, routes(*), shuttles(*)').eq('user_id', user.id)
           .order('created_at', { ascending: false }),
         supabase.from('ratings').select('booking_id').eq('user_id', user.id),
       ]);
       setBookings(bookingsData || []);
       setRatedBookingIds(new Set((ratingsData || []).map(r => r.booking_id)));
+
+      // Fetch driver profiles
+      const driverIds = [...new Set((bookingsData || []).map((b: any) => b.shuttles?.driver_id).filter(Boolean))];
+      if (driverIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('user_id, full_name, phone').in('user_id', driverIds);
+        const map: Record<string, any> = {};
+        (profiles || []).forEach(p => { map[p.user_id] = p; });
+        setDriverProfiles(map);
+      }
+
       setLoading(false);
     };
     fetchBookings();
@@ -122,6 +133,30 @@ const MyBookings = () => {
                     {lang === 'ar' ? 'تم التقييم' : 'Rated'}
                   </div>
                 )}
+
+                {/* Driver info */}
+                {(() => {
+                  const dp = driverProfiles[booking.shuttles?.driver_id];
+                  if (!dp) return null;
+                  return (
+                    <div className="flex items-center gap-2 mb-3 bg-surface rounded-lg p-3 text-sm">
+                      <Users className="w-4 h-4 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground text-sm truncate">{dp.full_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {booking.shuttles?.vehicle_model} · {booking.shuttles?.vehicle_plate}
+                        </p>
+                      </div>
+                      {dp.phone && (
+                        <a href={`tel:${dp.phone}`}>
+                          <Button variant="outline" size="icon" className="rounded-full w-8 h-8">
+                            <Phone className="w-3.5 h-3.5" />
+                          </Button>
+                        </a>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-primary">{booking.total_price} EGP</span>
