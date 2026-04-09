@@ -60,14 +60,23 @@ const AdminPanel = () => {
       supabase.from('routes').select('*').order('created_at', { ascending: false }),
       supabase.from('driver_applications').select('*').order('created_at', { ascending: false }),
       supabase.from('shuttles').select('*, routes(name_en, name_ar)').order('created_at', { ascending: false }),
-      supabase.from('bookings').select('*, routes(name_en, name_ar)').order('created_at', { ascending: false }).limit(100),
+      supabase.from('bookings').select('*, routes(name_en, name_ar)').order('created_at', { ascending: true }).limit(200),
     ]);
 
     setRoutes(routesRes.data || []);
     setApplications(appsRes.data || []);
     setShuttles(shuttlesRes.data || []);
     const bks = bookingsRes.data || [];
-    setBookings(bks);
+
+    // Fetch profiles for all booking user_ids
+    const userIds = [...new Set(bks.map(b => b.user_id))];
+    let profileMap: Record<string, any> = {};
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase.from('profiles').select('user_id, full_name, phone').in('user_id', userIds);
+      (profiles || []).forEach(p => { profileMap[p.user_id] = p; });
+    }
+
+    setBookings(bks.map(b => ({ ...b, profile: profileMap[b.user_id] })));
 
     setStats({
       totalBookings: bks.length,
