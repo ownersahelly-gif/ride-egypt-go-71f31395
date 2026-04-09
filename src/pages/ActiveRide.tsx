@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   ChevronLeft, ChevronRight, Users, MapPin, MessageCircle,
   CheckCircle2, Navigation, Loader2, UserCheck, LogOut as DropOff,
-  Phone, ArrowDown, Clock, AlertCircle
+  Phone, ArrowDown, Clock, AlertCircle, Flag, Square
 } from 'lucide-react';
 
 interface OrderedStop {
