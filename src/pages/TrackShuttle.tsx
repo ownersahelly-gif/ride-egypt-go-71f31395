@@ -45,6 +45,51 @@ const TrackShuttle = () => {
   // ETA
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const [stopsBeforeYou, setStopsBeforeYou] = useState(0);
+  const [notificationSent, setNotificationSent] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(p => setNotifPermission(p));
+    }
+  }, []);
+
+  // Proximity notification: notify when shuttle is within ~1km of user's pickup
+  useEffect(() => {
+    if (notificationSent || !shuttle?.current_lat || !shuttle?.current_lng || !booking || !route) return;
+    if (notifPermission !== 'granted') return;
+    if (booking.status === 'boarded') return;
+
+    const pickupLat = booking.custom_pickup_lat ?? route.origin_lat;
+    const pickupLng = booking.custom_pickup_lng ?? route.origin_lng;
+
+    // Haversine distance
+    const toRad = (d: number) => d * Math.PI / 180;
+    const R = 6371000; // meters
+    const dLat = toRad(pickupLat - shuttle.current_lat);
+    const dLng = toRad(pickupLng - shuttle.current_lng);
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(shuttle.current_lat)) * Math.cos(toRad(pickupLat)) * Math.sin(dLng / 2) ** 2;
+    const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    if (distance <= 1000) {
+      const title = lang === 'ar' ? '🚐 الشاتل يقترب!' : '🚐 Shuttle approaching!';
+      const body = lang === 'ar'
+        ? `الشاتل على بعد أقل من كيلومتر من نقطة الصعود الخاصة بك${etaMinutes ? ` (${etaMinutes} دقيقة)` : ''}`
+        : `Your shuttle is less than 1km away from your pickup${etaMinutes ? ` (${etaMinutes} min)` : ''}`;
+
+      new Notification(title, {
+        body,
+        icon: '/favicon.ico',
+        tag: 'shuttle-approaching',
+      } as NotificationOptions);
+      setNotificationSent(true);
+    }
+  }, [shuttle?.current_lat, shuttle?.current_lng, booking, route, notificationSent, notifPermission, lang, etaMinutes]);
 
   const fetchData = useCallback(async () => {
     if (!bookingId || !user) { setLoading(false); return; }
