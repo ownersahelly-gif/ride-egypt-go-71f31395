@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { MapPin, Clock, Ticket, Plus, LogOut, Globe, User, Navigation, Shield, Car } from 'lucide-react';
+import { MapPin, Clock, Ticket, Plus, LogOut, Globe, User, Navigation, Shield, Car, Phone, Users, Star } from 'lucide-react';
 import { useBookingNotifications } from '@/hooks/useBookingNotifications';
 
 const Dashboard = () => {
@@ -13,6 +13,7 @@ const Dashboard = () => {
   const { t, lang, setLang } = useLanguage();
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<any[]>([]);
+  const [driverProfiles, setDriverProfiles] = useState<Record<string, any>>({});
   const [profile, setProfile] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isDriver, setIsDriver] = useState(false);
@@ -30,6 +31,15 @@ const Dashboard = () => {
       const roles = (rolesData || []).map(r => r.role);
       setIsAdmin(roles.includes('admin'));
       setIsDriver(profileData?.user_type === 'driver' || roles.includes('moderator'));
+
+      // Fetch driver profiles for bookings
+      const driverIds = [...new Set((bookingsData || []).map((b: any) => b.shuttles?.driver_id).filter(Boolean))];
+      if (driverIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('user_id, full_name, phone').in('user_id', driverIds);
+        const map: Record<string, any> = {};
+        (profiles || []).forEach(p => { map[p.user_id] = p; });
+        setDriverProfiles(map);
+      }
     };
     fetchData();
   }, [user]);
@@ -134,30 +144,57 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {bookings.map((booking) => (
-                <div key={booking.id} className="bg-card border border-border rounded-xl p-5 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <MapPin className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {lang === 'ar' ? booking.routes?.name_ar : booking.routes?.name_en}
-                      </p>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-0.5">
-                        <Clock className="w-3.5 h-3.5" />
-                        {booking.scheduled_date} · {booking.scheduled_time}
+              {bookings.map((booking) => {
+                const driverProfile = driverProfiles[booking.shuttles?.driver_id];
+                return (
+                  <Link key={booking.id} to={`/my-bookings`} className="block">
+                    <div className="bg-card border border-border rounded-xl p-5 hover:border-secondary/40 transition-all">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <MapPin className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">
+                              {lang === 'ar' ? booking.routes?.name_ar : booking.routes?.name_en}
+                            </p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-0.5">
+                              <Clock className="w-3.5 h-3.5" />
+                              {booking.scheduled_date} · {booking.scheduled_time}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-foreground">{booking.total_price} EGP</span>
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[booking.status] || ''}`}>
+                            {t(`booking.status.${booking.status}`)}
+                          </span>
+                        </div>
                       </div>
+                      {/* Driver info */}
+                      {driverProfile && (
+                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border text-xs text-muted-foreground">
+                          <Users className="w-3.5 h-3.5 text-primary" />
+                          <span>{driverProfile.full_name}</span>
+                          {booking.shuttles?.vehicle_model && (
+                            <>
+                              <span>·</span>
+                              <span>{booking.shuttles.vehicle_model} · {booking.shuttles.vehicle_plate}</span>
+                            </>
+                          )}
+                          {driverProfile.phone && (
+                            <a href={`tel:${driverProfile.phone}`} className="ms-auto" onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" className="w-7 h-7">
+                                <Phone className="w-3.5 h-3.5" />
+                              </Button>
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-foreground">{booking.total_price} EGP</span>
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[booking.status] || ''}`}>
-                      {t(`booking.status.${booking.status}`)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>
