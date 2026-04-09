@@ -123,6 +123,10 @@ const Dashboard = () => {
 
         {/* Recent Bookings */}
         <div>
+          <h2 className="text-xl font-bold text-foreground mb-4">{t('dashboard.recentBookings')}</h2>
+          {bookings.length === 0 ? (
+            <div className="bg-card rounded-2xl border border-border p-12 text-center">
+              <Ticket className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
               <p className="text-muted-foreground">{t('dashboard.noBookings')}</p>
               <Link to="/book">
                 <Button className="mt-4">{t('dashboard.bookFirst')}</Button>
