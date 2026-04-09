@@ -166,6 +166,60 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_schedules: {
+        Row: {
+          created_at: string
+          day_of_week: number
+          departure_time: string
+          driver_id: string
+          id: string
+          is_active: boolean
+          is_recurring: boolean
+          route_id: string
+          shuttle_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: number
+          departure_time: string
+          driver_id: string
+          id?: string
+          is_active?: boolean
+          is_recurring?: boolean
+          route_id: string
+          shuttle_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number
+          departure_time?: string
+          driver_id?: string
+          id?: string
+          is_active?: boolean
+          is_recurring?: boolean
+          route_id?: string
+          shuttle_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_schedules_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_schedules_shuttle_id_fkey"
+            columns: ["shuttle_id"]
+            isOneToOne: false
+            referencedRelation: "shuttles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -233,6 +287,73 @@ export type Database = {
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ride_instances: {
+        Row: {
+          available_seats: number
+          created_at: string
+          departure_time: string
+          driver_id: string
+          id: string
+          ride_date: string
+          route_id: string
+          schedule_id: string | null
+          shuttle_id: string
+          status: string
+          total_seats: number
+          updated_at: string
+        }
+        Insert: {
+          available_seats?: number
+          created_at?: string
+          departure_time: string
+          driver_id: string
+          id?: string
+          ride_date: string
+          route_id: string
+          schedule_id?: string | null
+          shuttle_id: string
+          status?: string
+          total_seats?: number
+          updated_at?: string
+        }
+        Update: {
+          available_seats?: number
+          created_at?: string
+          departure_time?: string
+          driver_id?: string
+          id?: string
+          ride_date?: string
+          route_id?: string
+          schedule_id?: string | null
+          shuttle_id?: string
+          status?: string
+          total_seats?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ride_instances_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ride_instances_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "driver_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ride_instances_shuttle_id_fkey"
+            columns: ["shuttle_id"]
+            isOneToOne: false
+            referencedRelation: "shuttles"
             referencedColumns: ["id"]
           },
         ]
