@@ -237,7 +237,11 @@ const ActiveRide = () => {
               <div className="text-xs text-muted-foreground space-y-1 mb-3">
                 <div className="flex items-center gap-1">
                   <Navigation className="w-3 h-3 text-green-500" />
-                  <span>{lang === 'ar' ? (b.stops?.name_ar || 'نقطة الركوب') : (b.stops?.name_en || 'Pickup')}</span>
+                  <span>
+                    {b.custom_pickup_name
+                      ? `📍 ${b.custom_pickup_name}`
+                      : (lang === 'ar' ? (b.stops?.name_ar || 'نقطة الركوب') : (b.stops?.name_en || 'Pickup'))}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <MapPin className="w-3 h-3 text-destructive" />
