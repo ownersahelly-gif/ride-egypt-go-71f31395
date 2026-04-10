@@ -510,7 +510,7 @@ const DriverDashboard = () => {
                         });
 
                         const isToday = slot.dayOffset === 0;
-                        const canStart = isToday && shuttle.status === 'active' && slotBookings.length > 0;
+                        const canStart = isToday && !slot.isPast && shuttle.status === 'active' && slotBookings.length > 0;
 
                         const routeOrigin = { lat: slot.routeInfo?.origin_lat || 0, lng: slot.routeInfo?.origin_lng || 0 };
                         const routeDestination = { lat: slot.routeInfo?.destination_lat || 0, lng: slot.routeInfo?.destination_lng || 0 };
