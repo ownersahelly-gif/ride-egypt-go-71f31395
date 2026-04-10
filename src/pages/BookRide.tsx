@@ -12,7 +12,7 @@ import PlacesAutocomplete from '@/components/PlacesAutocomplete';
 import {
   MapPin, Clock, Users, ArrowRight, Search, ChevronLeft, ChevronRight,
   Calendar, AlertCircle, Car, User as UserIcon, Loader2, CheckCircle2, XCircle,
-  Navigation, Upload, Image as ImageIcon, ListOrdered, Phone
+  Navigation, Upload, Image as ImageIcon, ListOrdered, Phone, History, Package, Bookmark
 } from 'lucide-react';
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
