@@ -63,26 +63,39 @@ const ActiveRide = () => {
 
   const fetchData = useCallback(async () => {
     if (!user) return;
-    const { data: shuttleData } = await supabase
+    const today = new Date().toISOString().split('T')[0];
+
+    // Find the shuttle that has today's bookings (not just any shuttle)
+    const { data: allShuttles } = await supabase
       .from('shuttles')
       .select('*, routes(*)')
-      .eq('driver_id', user.id)
-      .limit(1)
-      .maybeSingle();
+      .eq('driver_id', user.id);
 
-    if (!shuttleData) { setLoading(false); return; }
-    setShuttle(shuttleData);
-    setRoute(shuttleData.routes);
+    let chosenShuttle: any = null;
+    let bks: any[] = [];
 
-    const today = new Date().toISOString().split('T')[0];
-    const { data: bookingsData } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('shuttle_id', shuttleData.id)
-      .eq('scheduled_date', today)
-      .in('status', ['confirmed', 'boarded']);
+    for (const s of (allShuttles || [])) {
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('shuttle_id', s.id)
+        .eq('scheduled_date', today)
+        .in('status', ['confirmed', 'boarded']);
+      if (bookingsData && bookingsData.length > 0) {
+        chosenShuttle = s;
+        bks = bookingsData;
+        break;
+      }
+    }
 
-    const bks = bookingsData || [];
+    if (!chosenShuttle) {
+      // Fallback to first shuttle
+      chosenShuttle = allShuttles?.[0] || null;
+    }
+
+    if (!chosenShuttle) { setLoading(false); return; }
+    setShuttle(chosenShuttle);
+    setRoute(chosenShuttle.routes);
     setBookings(bks);
 
     const userIds = [...new Set(bks.map(b => b.user_id))];
