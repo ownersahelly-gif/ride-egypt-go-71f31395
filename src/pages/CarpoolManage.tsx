@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import BottomNav from '@/components/BottomNav';
+import MapView from '@/components/MapView';
 import {
   ChevronLeft, ChevronRight, MapPin, Check, X, MessageCircle, Send, User, Trash2
 } from 'lucide-react';
@@ -44,7 +45,6 @@ const CarpoolManage = () => {
     setRequests(reqRes.data || []);
     setMessages(msgRes.data || []);
 
-    // Fetch profiles for all participants
     const userIds = new Set<string>();
     reqRes.data?.forEach((r: any) => userIds.add(r.user_id));
     msgRes.data?.forEach((m: any) => userIds.add(m.sender_id));
@@ -87,21 +87,50 @@ const CarpoolManage = () => {
   const pendingReqs = requests.filter(r => r.status === 'pending');
   const acceptedReqs = requests.filter(r => r.status === 'accepted');
 
+  const mapMarkers = [
+    { lat: route.origin_lat, lng: route.origin_lng, label: lang === 'ar' ? 'انطلاق' : 'Start', color: 'green' as const },
+    { lat: route.destination_lat, lng: route.destination_lng, label: lang === 'ar' ? 'وصول' : 'End', color: 'red' as const },
+    ...acceptedReqs.map(r => ({
+      lat: r.pickup_lat, lng: r.pickup_lng,
+      label: profiles[r.user_id]?.full_name?.slice(0, 10) || 'P',
+      color: 'orange' as const,
+    })),
+  ];
+
   return (
     <div className="min-h-screen bg-background pb-20" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="bg-primary text-primary-foreground px-4 pt-12 pb-6">
+      <div className="bg-primary text-primary-foreground px-4 pt-12 pb-4">
         <button onClick={() => navigate('/carpool')} className="mb-3"><Back className="w-6 h-6" /></button>
         <h1 className="text-lg font-bold">{lang === 'ar' ? 'إدارة الرحلة' : 'Manage Ride'}</h1>
-        <p className="text-sm text-primary-foreground/70">{route.origin_name} → {route.destination_name}</p>
+        <p className="text-sm text-primary-foreground/70 truncate">{route.origin_name} → {route.destination_name}</p>
+      </div>
+
+      {/* Route map with directions */}
+      <div className="h-48">
+        <MapView
+          markers={mapMarkers}
+          origin={{ lat: route.origin_lat, lng: route.origin_lng }}
+          destination={{ lat: route.destination_lat, lng: route.destination_lng }}
+          showDirections
+          zoom={11}
+        />
       </div>
 
       <div className="p-4 space-y-4">
         {/* Pending Requests */}
-        {pendingReqs.length > 0 && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">{lang === 'ar' ? 'طلبات جديدة' : 'New Requests'} ({pendingReqs.length})</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {pendingReqs.map(req => (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {lang === 'ar' ? 'طلبات الانضمام' : 'Join Requests'} ({pendingReqs.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pendingReqs.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {lang === 'ar' ? 'لا طلبات جديدة — شارك رابط رحلتك ليطلب الآخرون الانضمام' : 'No requests yet — share your ride link so others can request to join'}
+              </p>
+            ) : (
+              pendingReqs.map(req => (
                 <div key={req.id} className="border border-border rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <User className="w-4 h-4 text-muted-foreground" />
@@ -120,10 +149,10 @@ const CarpoolManage = () => {
                     </Button>
                   </div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+              ))
+            )}
+          </CardContent>
+        </Card>
 
         {/* Accepted Passengers */}
         <Card>

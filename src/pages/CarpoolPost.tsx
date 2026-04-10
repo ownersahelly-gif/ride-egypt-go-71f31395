@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import PlacesAutocomplete from '@/components/PlacesAutocomplete';
+import MapView from '@/components/MapView';
 import { ChevronLeft, ChevronRight, MapPin, Clock, Users, Fuel, RefreshCw } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 
@@ -32,6 +33,7 @@ const CarpoolPost = () => {
   const [allowSwap, setAllowSwap] = useState(false);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [pinMode, setPinMode] = useState<'origin' | 'destination' | null>(null);
 
   const dayLabels = lang === 'ar'
     ? ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت']
@@ -40,6 +42,24 @@ const CarpoolPost = () => {
   const toggleDay = (d: number) => {
     setDaysOfWeek(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
   };
+
+  const handleMapClick = (lat: number, lng: number) => {
+    if (!pinMode) return;
+    const label = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    if (pinMode === 'origin') {
+      setOrigin({ name: label, lat, lng });
+      toast({ title: lang === 'ar' ? 'تم تحديد نقطة الانطلاق' : 'Origin pinned on map' });
+    } else {
+      setDestination({ name: label, lat, lng });
+      toast({ title: lang === 'ar' ? 'تم تحديد الوجهة' : 'Destination pinned on map' });
+    }
+    setPinMode(null);
+  };
+
+  const mapMarkers = [
+    ...(origin ? [{ lat: origin.lat, lng: origin.lng, label: lang === 'ar' ? 'انطلاق' : 'Start', color: 'green' as const }] : []),
+    ...(destination ? [{ lat: destination.lat, lng: destination.lng, label: lang === 'ar' ? 'وصول' : 'End', color: 'red' as const }] : []),
+  ];
 
   const handleSubmit = async () => {
     if (!user || !origin || !destination) {
@@ -94,7 +114,17 @@ const CarpoolPost = () => {
                 placeholder={lang === 'ar' ? 'نقطة الانطلاق' : 'Starting point'}
                 onSelect={(place) => setOrigin({ name: place.name, lat: place.lat, lng: place.lng })}
               />
-              {origin && <p className="text-xs text-muted-foreground mt-1">✓ {origin.name}</p>}
+              {origin && <p className="text-xs text-green-600 mt-1">✓ {origin.name}</p>}
+              <Button
+                type="button" variant="ghost" size="sm" className="mt-1 text-xs"
+                onClick={() => setPinMode(pinMode === 'origin' ? null : 'origin')}
+              >
+                <MapPin className="w-3 h-3 mr-1" />
+                {pinMode === 'origin'
+                  ? (lang === 'ar' ? '← اضغط على الخريطة' : '← Tap the map')
+                  : (lang === 'ar' ? 'أو حدد على الخريطة' : 'Or pin on map')
+                }
+              </Button>
             </div>
             <div>
               <Label>{lang === 'ar' ? 'إلى أين' : 'To'}</Label>
@@ -102,7 +132,41 @@ const CarpoolPost = () => {
                 placeholder={lang === 'ar' ? 'الوجهة' : 'Destination'}
                 onSelect={(place) => setDestination({ name: place.name, lat: place.lat, lng: place.lng })}
               />
-              {destination && <p className="text-xs text-muted-foreground mt-1">✓ {destination.name}</p>}
+              {destination && <p className="text-xs text-green-600 mt-1">✓ {destination.name}</p>}
+              <Button
+                type="button" variant="ghost" size="sm" className="mt-1 text-xs"
+                onClick={() => setPinMode(pinMode === 'destination' ? null : 'destination')}
+              >
+                <MapPin className="w-3 h-3 mr-1" />
+                {pinMode === 'destination'
+                  ? (lang === 'ar' ? '← اضغط على الخريطة' : '← Tap the map')
+                  : (lang === 'ar' ? 'أو حدد على الخريطة' : 'Or pin on map')
+                }
+              </Button>
+            </div>
+
+            {/* Interactive map for pin selection */}
+            <div className={`rounded-xl overflow-hidden border-2 transition-colors ${pinMode ? 'border-primary' : 'border-border'}`}>
+              {pinMode && (
+                <div className="bg-primary text-primary-foreground text-center text-xs py-1.5 font-medium">
+                  {pinMode === 'origin'
+                    ? (lang === 'ar' ? '🎯 اضغط لتحديد نقطة الانطلاق' : '🎯 Tap to set your starting point')
+                    : (lang === 'ar' ? '🎯 اضغط لتحديد الوجهة' : '🎯 Tap to set your destination')
+                  }
+                </div>
+              )}
+              <div className="h-56">
+                <MapView
+                  markers={mapMarkers}
+                  origin={origin && destination ? { lat: origin.lat, lng: origin.lng } : undefined}
+                  destination={origin && destination ? { lat: destination.lat, lng: destination.lng } : undefined}
+                  showDirections={!!(origin && destination)}
+                  center={origin ? { lat: origin.lat, lng: origin.lng } : undefined}
+                  zoom={12}
+                  showUserLocation
+                  onMapClick={handleMapClick}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
