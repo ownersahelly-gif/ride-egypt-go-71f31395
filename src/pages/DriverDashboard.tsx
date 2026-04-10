@@ -49,6 +49,7 @@ const DriverDashboard = () => {
     min_passengers: 5,
   });
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const scheduleFormRef = useRef<HTMLDivElement>(null);
 
   // Route request
   const [showRouteRequest, setShowRouteRequest] = useState(false);
