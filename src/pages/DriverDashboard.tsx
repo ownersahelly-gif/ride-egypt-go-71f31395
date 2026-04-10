@@ -206,7 +206,7 @@ const DriverDashboard = () => {
       setDriverSchedules(data || []);
       setShowScheduleForm(false);
       setSelectedRouteForSchedule(null);
-      setScheduleForm({ route_id: '', days: [], departure_time: '08:00', return_time: '17:00', is_recurring: true, min_passengers: 5 });
+      setScheduleForm({ route_id: '', days: [], departure_time: '08:00', return_time: '17:00', is_recurring: true, min_passengers: 5, trip_direction: 'both' });
       setTab('home');
     }
     setSavingSchedule(false);
