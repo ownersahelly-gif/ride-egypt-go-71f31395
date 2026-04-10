@@ -101,10 +101,9 @@ const Login = () => {
             <Arrow className="w-4 h-4" />
           </Button>
 
-          <p className="text-center text-sm text-muted-foreground">
-            {t('auth.noAccount')}{' '}
-            <Link to="/signup" className="text-primary font-medium hover:underline">{t('auth.signupLink')}</Link>
-          </p>
+          <Link to="/signup" className="block text-center text-sm text-primary font-medium hover:underline">
+            {t('auth.noAccount')} {t('auth.signupLink')}
+          </Link>
         </form>
       </div>
     </div>
