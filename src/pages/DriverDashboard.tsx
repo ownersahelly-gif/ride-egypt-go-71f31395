@@ -13,6 +13,7 @@ import { useDriverBookingNotifications } from '@/hooks/useBookingNotifications';
 import PlacesAutocomplete from '@/components/PlacesAutocomplete';
 import MapView from '@/components/MapView';
 import RideChat from '@/components/RideChat';
+import { useRef } from 'react';
 
 type TabType = 'home' | 'schedule' | 'trips';
 
@@ -48,6 +49,7 @@ const DriverDashboard = () => {
     min_passengers: 5,
   });
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const scheduleFormRef = useRef<HTMLDivElement>(null);
 
   // Route request
   const [showRouteRequest, setShowRouteRequest] = useState(false);
@@ -181,6 +183,7 @@ const DriverDashboard = () => {
     setSelectedRouteForSchedule(routeObj);
     setScheduleForm(prev => ({ ...prev, route_id: routeObj.id }));
     setShowScheduleForm(true);
+    setTimeout(() => scheduleFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
 
   const saveSchedule = async () => {
@@ -449,7 +452,10 @@ const DriverDashboard = () => {
             {/* ==================== SCHEDULE TAB ==================== */}
             {tab === 'schedule' && (
               <div className="space-y-4">
-                {/* Current schedules */}
+                <div className="text-center mb-2">
+                  <h2 className="text-lg font-bold text-foreground">{lang === 'ar' ? 'اختر المسار الذي تريد الذهاب إليه' : 'Choose the route you want to go to'}</h2>
+                  <p className="text-sm text-muted-foreground">{lang === 'ar' ? 'اختر مسار ثم حدد أيام وأوقات العمل' : 'Select a route then set your working days and times'}</p>
+                </div>
                 {driverSchedules.length > 0 && (
                   <div className="space-y-3">
                     {Object.entries(
@@ -503,7 +509,7 @@ const DriverDashboard = () => {
 
                 {/* Add schedule form */}
                 {showScheduleForm ? (
-                  <div className="bg-card border-2 border-primary/20 rounded-2xl p-5 space-y-4">
+                  <div ref={scheduleFormRef} className="bg-card border-2 border-primary/20 rounded-2xl p-5 space-y-4">
                     {selectedRouteForSchedule && (
                       <div className="bg-primary/5 rounded-xl p-3">
                         <p className="font-medium text-foreground text-sm">{lang === 'ar' ? selectedRouteForSchedule.name_ar : selectedRouteForSchedule.name_en}</p>
