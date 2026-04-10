@@ -491,28 +491,74 @@ const Dashboard = () => {
       const dropoffName = dropoffMode === 'end' ? (lang === 'ar' ? route.destination_name_ar : route.destination_name_en) : customDropoff?.name;
 
       const basePrice = dynamicPrice;
-      const totalPrice = usingBundle ? 0 : (tripDirection === 'both' ? basePrice * 2 : basePrice);
 
-      const { error } = await supabase.from('bookings').insert({
-        user_id: user.id,
-        route_id: selectedRide.route_id,
-        shuttle_id: selectedRide.shuttle_id,
-        seats: 1,
-        total_price: totalPrice,
-        scheduled_date: selectedRide.ride_date,
-        scheduled_time: selectedRide.departure_time,
-        status: asWaitlist ? 'waitlist' : (usingBundle ? 'confirmed' : 'pending'),
-        payment_proof_url: proofUrl,
-        waitlist_position: waitlistPos,
-        custom_pickup_lat: pickupLat,
-        custom_pickup_lng: pickupLng,
-        custom_pickup_name: pickupName,
-        custom_dropoff_lat: dropoffLat,
-        custom_dropoff_lng: dropoffLng,
-        custom_dropoff_name: dropoffName,
-        trip_direction: tripDirection,
-      });
-      if (error) throw error;
+      if (tripDirection === 'both') {
+        // Create TWO separate bookings for round trips
+        const goPrice = usingBundle ? 0 : basePrice;
+        const returnPrice = usingBundle ? 0 : basePrice;
+
+        const commonFields = {
+          user_id: user.id,
+          route_id: selectedRide.route_id,
+          shuttle_id: selectedRide.shuttle_id,
+          seats: 1,
+          scheduled_date: selectedRide.ride_date,
+          scheduled_time: selectedRide.departure_time,
+          status: asWaitlist ? 'waitlist' : (usingBundle ? 'confirmed' : 'pending'),
+          payment_proof_url: proofUrl,
+          waitlist_position: waitlistPos,
+        };
+
+        // GO booking: pickup → dropoff as entered
+        const { error: goErr } = await supabase.from('bookings').insert({
+          ...commonFields,
+          total_price: goPrice,
+          custom_pickup_lat: pickupLat,
+          custom_pickup_lng: pickupLng,
+          custom_pickup_name: pickupName,
+          custom_dropoff_lat: dropoffLat,
+          custom_dropoff_lng: dropoffLng,
+          custom_dropoff_name: dropoffName,
+          trip_direction: 'go',
+        });
+        if (goErr) throw goErr;
+
+        // RETURN booking: swap pickup ↔ dropoff
+        const { error: retErr } = await supabase.from('bookings').insert({
+          ...commonFields,
+          total_price: returnPrice,
+          custom_pickup_lat: dropoffLat,
+          custom_pickup_lng: dropoffLng,
+          custom_pickup_name: dropoffName,
+          custom_dropoff_lat: pickupLat,
+          custom_dropoff_lng: pickupLng,
+          custom_dropoff_name: pickupName,
+          trip_direction: 'return',
+        });
+        if (retErr) throw retErr;
+      } else {
+        const totalPrice = usingBundle ? 0 : basePrice;
+        const { error } = await supabase.from('bookings').insert({
+          user_id: user.id,
+          route_id: selectedRide.route_id,
+          shuttle_id: selectedRide.shuttle_id,
+          seats: 1,
+          total_price: totalPrice,
+          scheduled_date: selectedRide.ride_date,
+          scheduled_time: selectedRide.departure_time,
+          status: asWaitlist ? 'waitlist' : (usingBundle ? 'confirmed' : 'pending'),
+          payment_proof_url: proofUrl,
+          waitlist_position: waitlistPos,
+          custom_pickup_lat: pickupLat,
+          custom_pickup_lng: pickupLng,
+          custom_pickup_name: pickupName,
+          custom_dropoff_lat: dropoffLat,
+          custom_dropoff_lng: dropoffLng,
+          custom_dropoff_name: dropoffName,
+          trip_direction: tripDirection,
+        });
+        if (error) throw error;
+      }
 
       if (usingBundle && activeBundlePurchase) {
         await supabase.from('bundle_purchases').update({
