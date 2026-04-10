@@ -314,7 +314,8 @@ const BookRide = () => {
       toast({ title: lang === 'ar' ? 'اختر نقاط الركوب والنزول' : 'Select pickup & dropoff', variant: 'destructive' });
       return;
     }
-    if (!asWaitlist && !paymentProof) {
+    const usingBundle = useBundle && activeBundlePurchase;
+    if (!asWaitlist && !usingBundle && !paymentProof) {
       toast({ title: lang === 'ar' ? 'أرفق إثبات الدفع' : 'Attach payment proof', description: lang === 'ar' ? 'أرسل لقطة شاشة من InstaPay' : 'Upload InstaPay screenshot', variant: 'destructive' });
       return;
     }
@@ -326,8 +327,8 @@ const BookRide = () => {
     try {
       let proofUrl: string | null = null;
 
-      // Upload payment proof
-      if (paymentProof) {
+      // Upload payment proof (skip if using bundle)
+      if (paymentProof && !usingBundle) {
         setUploadingProof(true);
         const ext = paymentProof.name.split('.').pop();
         const filePath = `${user.id}/${Date.now()}.${ext}`;
@@ -355,43 +356,46 @@ const BookRide = () => {
         waitlistPos = ((existingWaitlist?.[0]?.waitlist_position as number) || 0) + 1;
       }
 
+      // Get pickup/dropoff coords
+      const pickupLat = pickupMode === 'start' ? selectedRide.routes.origin_lat : customPickup?.lat;
+      const pickupLng = pickupMode === 'start' ? selectedRide.routes.origin_lng : customPickup?.lng;
+      const pickupName = pickupMode === 'start'
+        ? (lang === 'ar' ? selectedRide.routes.origin_name_ar : selectedRide.routes.origin_name_en)
+        : customPickup?.name;
+      const dropoffLat = dropoffMode === 'end' ? selectedRide.routes.destination_lat : customDropoff?.lat;
+      const dropoffLng = dropoffMode === 'end' ? selectedRide.routes.destination_lng : customDropoff?.lng;
+      const dropoffName = dropoffMode === 'end'
+        ? (lang === 'ar' ? selectedRide.routes.destination_name_ar : selectedRide.routes.destination_name_en)
+        : customDropoff?.name;
+
       const bookingData: any = {
         user_id: user.id,
         route_id: selectedRide.route_id,
         shuttle_id: selectedRide.shuttle_id,
         seats: 1,
-        total_price: selectedRide.routes?.price || 0,
+        total_price: usingBundle ? 0 : (selectedRide.routes?.price || 0),
         scheduled_date: selectedRide.ride_date,
         scheduled_time: selectedRide.departure_time,
-        status: asWaitlist ? 'waitlist' : 'pending',
+        status: asWaitlist ? 'waitlist' : (usingBundle ? 'confirmed' : 'pending'),
         payment_proof_url: proofUrl,
         waitlist_position: waitlistPos,
+        custom_pickup_lat: pickupLat,
+        custom_pickup_lng: pickupLng,
+        custom_pickup_name: pickupName,
+        custom_dropoff_lat: dropoffLat,
+        custom_dropoff_lng: dropoffLng,
+        custom_dropoff_name: dropoffName,
       };
-
-      // Pickup
-      if (pickupMode === 'start') {
-        bookingData.custom_pickup_lat = selectedRide.routes.origin_lat;
-        bookingData.custom_pickup_lng = selectedRide.routes.origin_lng;
-        bookingData.custom_pickup_name = lang === 'ar' ? selectedRide.routes.origin_name_ar : selectedRide.routes.origin_name_en;
-      } else if (customPickup) {
-        bookingData.custom_pickup_lat = customPickup.lat;
-        bookingData.custom_pickup_lng = customPickup.lng;
-        bookingData.custom_pickup_name = customPickup.name;
-      }
-
-      // Dropoff
-      if (dropoffMode === 'end') {
-        bookingData.custom_dropoff_lat = selectedRide.routes.destination_lat;
-        bookingData.custom_dropoff_lng = selectedRide.routes.destination_lng;
-        bookingData.custom_dropoff_name = lang === 'ar' ? selectedRide.routes.destination_name_ar : selectedRide.routes.destination_name_en;
-      } else if (customDropoff) {
-        bookingData.custom_dropoff_lat = customDropoff.lat;
-        bookingData.custom_dropoff_lng = customDropoff.lng;
-        bookingData.custom_dropoff_name = customDropoff.name;
-      }
 
       const { error } = await supabase.from('bookings').insert(bookingData);
       if (error) throw error;
+
+      // Deduct from bundle if using one
+      if (usingBundle && activeBundlePurchase) {
+        await supabase.from('bundle_purchases').update({
+          rides_remaining: activeBundlePurchase.rides_remaining - 1,
+        }).eq('id', activeBundlePurchase.id);
+      }
 
       if (!asWaitlist) {
         await supabase.from('ride_instances').update({
@@ -399,12 +403,39 @@ const BookRide = () => {
         }).eq('id', selectedRide.id);
       }
 
+      // Save location for future use
+      if (user && selectedRide.route_id) {
+        const existing = savedLocations.find(sl =>
+          sl.pickup_lat === pickupLat && sl.pickup_lng === pickupLng &&
+          sl.dropoff_lat === dropoffLat && sl.dropoff_lng === dropoffLng
+        );
+        if (existing) {
+          await supabase.from('saved_locations').update({ use_count: existing.use_count + 1 }).eq('id', existing.id);
+        } else {
+          await supabase.from('saved_locations').insert({
+            user_id: user.id,
+            route_id: selectedRide.route_id,
+            pickup_lat: pickupLat,
+            pickup_lng: pickupLng,
+            pickup_name: pickupName,
+            dropoff_lat: dropoffLat,
+            dropoff_lng: dropoffLng,
+            dropoff_name: dropoffName,
+            label: `${pickupName} → ${dropoffName}`,
+          });
+        }
+      }
+
       toast({
         title: asWaitlist
           ? (lang === 'ar' ? 'تم إضافتك لقائمة الانتظار' : 'Added to waitlist')
+          : usingBundle
+          ? (lang === 'ar' ? 'تم الحجز من الباقة' : 'Booked from bundle')
           : (lang === 'ar' ? 'تم الحجز بنجاح' : 'Booking submitted'),
         description: asWaitlist
           ? (lang === 'ar' ? `ترتيبك: #${waitlistPos}` : `Your position: #${waitlistPos}`)
+          : usingBundle
+          ? (lang === 'ar' ? `متبقي ${activeBundlePurchase!.rides_remaining - 1} رحلة` : `${activeBundlePurchase!.rides_remaining - 1} rides remaining`)
           : (lang === 'ar' ? 'في انتظار موافقة المسؤول' : 'Waiting for admin approval'),
       });
       navigate('/my-bookings');
@@ -414,6 +445,89 @@ const BookRide = () => {
       setLoading(false);
       setUploadingProof(false);
     }
+  };
+
+  // --- Buy Bundle ---
+  const handleBuyBundle = async (bundle: any) => {
+    if (!user || !paymentProof) {
+      toast({ title: lang === 'ar' ? 'أرفق إثبات الدفع' : 'Attach payment proof', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      let proofUrl: string | null = null;
+      if (paymentProof) {
+        const ext = paymentProof.name.split('.').pop();
+        const filePath = `${user.id}/bundle_${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage.from('instapay-proofs').upload(filePath, paymentProof);
+        if (uploadErr) throw uploadErr;
+        const { data: urlData } = supabase.storage.from('instapay-proofs').getPublicUrl(filePath);
+        proofUrl = urlData?.publicUrl || filePath;
+      }
+
+      const expiresAt = new Date();
+      if (bundle.bundle_type === 'weekly') expiresAt.setDate(expiresAt.getDate() + 7);
+      else expiresAt.setDate(expiresAt.getDate() + 30);
+
+      const { error } = await supabase.from('bundle_purchases').insert({
+        user_id: user.id,
+        bundle_id: bundle.id,
+        route_id: bundle.route_id,
+        rides_remaining: bundle.ride_count,
+        rides_total: bundle.ride_count,
+        expires_at: expiresAt.toISOString(),
+        status: 'active',
+        payment_proof_url: proofUrl,
+      });
+      if (error) throw error;
+
+      toast({
+        title: lang === 'ar' ? 'تم شراء الباقة!' : 'Bundle purchased!',
+        description: lang === 'ar' ? `${bundle.ride_count} رحلة متاحة` : `${bundle.ride_count} rides available`,
+      });
+
+      // Refresh bundle purchase
+      const { data: purchases } = await supabase.from('bundle_purchases').select('*')
+        .eq('user_id', user.id).eq('route_id', bundle.route_id).eq('status', 'active')
+        .gt('rides_remaining', 0).gt('expires_at', new Date().toISOString()).limit(1);
+      setActiveBundlePurchase(purchases?.[0] || null);
+      setPaymentProof(null);
+      setPaymentPreview(null);
+      setShowBundleSection(false);
+    } catch (error: any) {
+      toast({ title: t('auth.error'), description: error.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Apply saved location
+  const applySavedLocation = (saved: any) => {
+    if (saved.pickup_lat && saved.pickup_lng) {
+      const isDefaultPickup = saved.pickup_lat === selectedRide?.routes?.origin_lat && saved.pickup_lng === selectedRide?.routes?.origin_lng;
+      if (isDefaultPickup) {
+        setPickupMode('start');
+        setCustomPickup(null);
+        setPickupResult(null);
+      } else {
+        setPickupMode('nearby');
+        setCustomPickup({ lat: saved.pickup_lat, lng: saved.pickup_lng, name: saved.pickup_name });
+        setPickupResult({ ok: true, minutes: 0, onRoute: true });
+      }
+    }
+    if (saved.dropoff_lat && saved.dropoff_lng) {
+      const isDefaultDropoff = saved.dropoff_lat === selectedRide?.routes?.destination_lat && saved.dropoff_lng === selectedRide?.routes?.destination_lng;
+      if (isDefaultDropoff) {
+        setDropoffMode('end');
+        setCustomDropoff(null);
+        setDropoffResult(null);
+      } else {
+        setDropoffMode('nearby');
+        setCustomDropoff({ lat: saved.dropoff_lat, lng: saved.dropoff_lng, name: saved.dropoff_name });
+        setDropoffResult({ ok: true, minutes: 0, onRoute: true });
+      }
+    }
+    toast({ title: lang === 'ar' ? 'تم تطبيق الموقع المحفوظ' : 'Saved location applied' });
   };
 
   const dateOptions = getDateOptions();
