@@ -220,10 +220,9 @@ const DriverDashboard = () => {
       <div className="container mx-auto px-4 py-6">
         {!shuttle && (
           <div className="bg-card rounded-2xl border border-border p-12 text-center">
-            <Car className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-foreground mb-2">{t('driverDash.noShuttle')}</h2>
-            <p className="text-muted-foreground mb-4">{t('driverDash.noShuttleDesc')}</p>
-            <Link to="/driver-apply"><Button>{t('driverDash.applyNow')}</Button></Link>
+            <Clock className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-foreground mb-2">{lang === 'ar' ? 'طلبك قيد المراجعة' : 'Application Under Review'}</h2>
+            <p className="text-muted-foreground mb-4">{lang === 'ar' ? 'تم استلام طلبك وجاري مراجعته. سيتم تفعيل حسابك تلقائياً عند الموافقة.' : 'Your application has been received and is being reviewed. Your account will be activated automatically once approved.'}</p>
           </div>
         )}
 
