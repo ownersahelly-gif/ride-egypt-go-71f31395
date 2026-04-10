@@ -12,7 +12,7 @@ import MapView from '@/components/MapView';
 import {
   ChevronLeft, Route, Users, Car, Ticket, BarChart3, Plus, Edit, Trash2,
   CheckCircle2, XCircle, MapPin, Clock, Search, Globe, LogOut, Shield,
-  Loader2, Eye, Database, Settings, Phone
+  Loader2, Eye, Database, Settings, Phone, Package
 } from 'lucide-react';
 
 type AdminTab = 'routes' | 'drivers' | 'shuttles' | 'bookings' | 'analytics' | 'approvals' | 'settings';
@@ -29,6 +29,12 @@ const AdminPanel = () => {
   // InstaPay settings
   const [instapayPhone, setInstapayPhone] = useState('');
   const [savingPhone, setSavingPhone] = useState(false);
+
+  // Bundle management
+  const [bundles, setBundles] = useState<any[]>([]);
+  const [showBundleForm, setShowBundleForm] = useState(false);
+  const [bundleForm, setBundleForm] = useState({ route_id: '', bundle_type: 'weekly', ride_count: 10, price: 200, discount_percentage: 15 });
+  const [savingBundle, setSavingBundle] = useState(false);
 
   // Data states
   const [routes, setRoutes] = useState<any[]>([]);
@@ -60,15 +66,17 @@ const AdminPanel = () => {
   }, [user]);
 
   const fetchAllData = async () => {
-    const [routesRes, appsRes, shuttlesRes, bookingsRes, settingsRes] = await Promise.all([
+    const [routesRes, appsRes, shuttlesRes, bookingsRes, settingsRes, bundlesRes] = await Promise.all([
       supabase.from('routes').select('*').order('created_at', { ascending: false }),
       supabase.from('driver_applications').select('*').order('created_at', { ascending: false }),
       supabase.from('shuttles').select('*, routes(name_en, name_ar)').order('created_at', { ascending: false }),
       supabase.from('bookings').select('*, routes(name_en, name_ar)').order('created_at', { ascending: true }).limit(200),
       supabase.from('app_settings').select('*').eq('key', 'instapay_phone').single(),
+      supabase.from('ride_bundles').select('*, routes(name_en, name_ar)').order('created_at', { ascending: false }),
     ]);
 
     if (settingsRes.data) setInstapayPhone(settingsRes.data.value);
+    setBundles(bundlesRes.data || []);
 
     setRoutes(routesRes.data || []);
     setApplications(appsRes.data || []);
@@ -797,6 +805,91 @@ const AdminPanel = () => {
                   {savingPhone ? <Loader2 className="w-4 h-4 animate-spin" /> : (lang === 'ar' ? 'حفظ' : 'Save')}
                 </Button>
               </div>
+            </div>
+
+            {/* Bundles Management */}
+            <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <Package className="w-5 h-5 text-secondary" />
+                  {lang === 'ar' ? 'الباقات' : 'Ride Bundles'}
+                </h3>
+                <Button size="sm" onClick={() => setShowBundleForm(!showBundleForm)}>
+                  <Plus className="w-4 h-4 me-1" />{lang === 'ar' ? 'إضافة' : 'Add'}
+                </Button>
+              </div>
+
+              {showBundleForm && (
+                <div className="bg-surface rounded-xl p-4 space-y-3 border border-border">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>{lang === 'ar' ? 'المسار' : 'Route'}</Label>
+                      <select className="w-full border border-border rounded-lg p-2 bg-card text-foreground text-sm"
+                        value={bundleForm.route_id} onChange={e => setBundleForm(p => ({ ...p, route_id: e.target.value }))}>
+                        <option value="">{lang === 'ar' ? 'اختر مسار' : 'Select route'}</option>
+                        {routes.filter(r => r.status === 'active').map(r => (
+                          <option key={r.id} value={r.id}>{lang === 'ar' ? r.name_ar : r.name_en}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label>{lang === 'ar' ? 'النوع' : 'Type'}</Label>
+                      <select className="w-full border border-border rounded-lg p-2 bg-card text-foreground text-sm"
+                        value={bundleForm.bundle_type} onChange={e => setBundleForm(p => ({ ...p, bundle_type: e.target.value }))}>
+                        <option value="weekly">{lang === 'ar' ? 'أسبوعي' : 'Weekly'}</option>
+                        <option value="monthly">{lang === 'ar' ? 'شهري' : 'Monthly'}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label>{lang === 'ar' ? 'عدد الرحلات' : 'Ride Count'}</Label>
+                      <Input type="number" value={bundleForm.ride_count} onChange={e => setBundleForm(p => ({ ...p, ride_count: parseInt(e.target.value) || 0 }))} />
+                    </div>
+                    <div>
+                      <Label>{lang === 'ar' ? 'سعر الباقة (EGP)' : 'Bundle Price (EGP)'}</Label>
+                      <Input type="number" value={bundleForm.price} onChange={e => setBundleForm(p => ({ ...p, price: parseInt(e.target.value) || 0 }))} />
+                    </div>
+                    <div>
+                      <Label>{lang === 'ar' ? 'نسبة الخصم %' : 'Discount %'}</Label>
+                      <Input type="number" value={bundleForm.discount_percentage} onChange={e => setBundleForm(p => ({ ...p, discount_percentage: parseInt(e.target.value) || 0 }))} />
+                    </div>
+                  </div>
+                  <Button disabled={savingBundle || !bundleForm.route_id} onClick={async () => {
+                    setSavingBundle(true);
+                    const { error } = await supabase.from('ride_bundles').insert({ ...bundleForm, is_active: true });
+                    if (error) toast.error(error.message);
+                    else { toast.success(lang === 'ar' ? 'تم إنشاء الباقة' : 'Bundle created'); setShowBundleForm(false); fetchAllData(); }
+                    setSavingBundle(false);
+                  }}>
+                    {savingBundle ? <Loader2 className="w-4 h-4 animate-spin" /> : (lang === 'ar' ? 'إنشاء الباقة' : 'Create Bundle')}
+                  </Button>
+                </div>
+              )}
+
+              {bundles.length > 0 ? (
+                <div className="space-y-2">
+                  {bundles.map((b: any) => (
+                    <div key={b.id} className="flex items-center justify-between bg-surface rounded-lg p-3 border border-border">
+                      <div>
+                        <p className="font-medium text-foreground text-sm">
+                          {b.bundle_type === 'weekly' ? (lang === 'ar' ? 'أسبوعي' : 'Weekly') : (lang === 'ar' ? 'شهري' : 'Monthly')}
+                          {' — '}{lang === 'ar' ? b.routes?.name_ar : b.routes?.name_en}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {b.ride_count} {lang === 'ar' ? 'رحلة' : 'rides'} · {b.price} EGP · {b.discount_percentage}% {lang === 'ar' ? 'خصم' : 'off'}
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={async () => {
+                        await supabase.from('ride_bundles').delete().eq('id', b.id);
+                        fetchAllData();
+                      }}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">{lang === 'ar' ? 'لا توجد باقات بعد' : 'No bundles yet'}</p>
+              )}
             </div>
           </div>
         )}

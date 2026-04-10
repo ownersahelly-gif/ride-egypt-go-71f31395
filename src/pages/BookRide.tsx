@@ -12,7 +12,7 @@ import PlacesAutocomplete from '@/components/PlacesAutocomplete';
 import {
   MapPin, Clock, Users, ArrowRight, Search, ChevronLeft, ChevronRight,
   Calendar, AlertCircle, Car, User as UserIcon, Loader2, CheckCircle2, XCircle,
-  Navigation, Upload, Image as ImageIcon, ListOrdered, Phone
+  Navigation, Upload, Image as ImageIcon, ListOrdered, Phone, History, Package, Bookmark
 } from 'lucide-react';
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
@@ -109,6 +109,15 @@ const BookRide = () => {
   // Route directions result for on-route checking
   const [routeDirections, setRouteDirections] = useState<any>(null);
 
+  // Saved locations
+  const [savedLocations, setSavedLocations] = useState<any[]>([]);
+
+  // Bundles
+  const [availableBundles, setAvailableBundles] = useState<any[]>([]);
+  const [activeBundlePurchase, setActiveBundlePurchase] = useState<any>(null);
+  const [useBundle, setUseBundle] = useState(false);
+  const [showBundleSection, setShowBundleSection] = useState(false);
+
   const getDateOptions = () => {
     const options: { label: string; date: string }[] = [];
     const today = new Date();
@@ -180,7 +189,20 @@ const BookRide = () => {
     setDropoffResult(null);
     setPickupMode('start');
     setDropoffMode('end');
+    setUseBundle(false);
     setStep('details');
+
+    if (user && ride.route_id) {
+      // Fetch saved locations, bundles, and active bundle purchases in parallel
+      const [{ data: savedLocs }, { data: bundles }, { data: purchases }] = await Promise.all([
+        supabase.from('saved_locations').select('*').eq('user_id', user.id).eq('route_id', ride.route_id).order('use_count', { ascending: false }).limit(5),
+        supabase.from('ride_bundles').select('*').eq('route_id', ride.route_id).eq('is_active', true),
+        supabase.from('bundle_purchases').select('*').eq('user_id', user.id).eq('route_id', ride.route_id).eq('status', 'active').gt('rides_remaining', 0).gt('expires_at', new Date().toISOString()).limit(1),
+      ]);
+      setSavedLocations(savedLocs || []);
+      setAvailableBundles(bundles || []);
+      setActiveBundlePurchase(purchases?.[0] || null);
+    }
   };
 
   const filteredRides = rideInstances.filter((ri) => {
@@ -292,7 +314,8 @@ const BookRide = () => {
       toast({ title: lang === 'ar' ? 'اختر نقاط الركوب والنزول' : 'Select pickup & dropoff', variant: 'destructive' });
       return;
     }
-    if (!asWaitlist && !paymentProof) {
+    const usingBundle = useBundle && activeBundlePurchase;
+    if (!asWaitlist && !usingBundle && !paymentProof) {
       toast({ title: lang === 'ar' ? 'أرفق إثبات الدفع' : 'Attach payment proof', description: lang === 'ar' ? 'أرسل لقطة شاشة من InstaPay' : 'Upload InstaPay screenshot', variant: 'destructive' });
       return;
     }
@@ -304,8 +327,8 @@ const BookRide = () => {
     try {
       let proofUrl: string | null = null;
 
-      // Upload payment proof
-      if (paymentProof) {
+      // Upload payment proof (skip if using bundle)
+      if (paymentProof && !usingBundle) {
         setUploadingProof(true);
         const ext = paymentProof.name.split('.').pop();
         const filePath = `${user.id}/${Date.now()}.${ext}`;
@@ -333,43 +356,46 @@ const BookRide = () => {
         waitlistPos = ((existingWaitlist?.[0]?.waitlist_position as number) || 0) + 1;
       }
 
+      // Get pickup/dropoff coords
+      const pickupLat = pickupMode === 'start' ? selectedRide.routes.origin_lat : customPickup?.lat;
+      const pickupLng = pickupMode === 'start' ? selectedRide.routes.origin_lng : customPickup?.lng;
+      const pickupName = pickupMode === 'start'
+        ? (lang === 'ar' ? selectedRide.routes.origin_name_ar : selectedRide.routes.origin_name_en)
+        : customPickup?.name;
+      const dropoffLat = dropoffMode === 'end' ? selectedRide.routes.destination_lat : customDropoff?.lat;
+      const dropoffLng = dropoffMode === 'end' ? selectedRide.routes.destination_lng : customDropoff?.lng;
+      const dropoffName = dropoffMode === 'end'
+        ? (lang === 'ar' ? selectedRide.routes.destination_name_ar : selectedRide.routes.destination_name_en)
+        : customDropoff?.name;
+
       const bookingData: any = {
         user_id: user.id,
         route_id: selectedRide.route_id,
         shuttle_id: selectedRide.shuttle_id,
         seats: 1,
-        total_price: selectedRide.routes?.price || 0,
+        total_price: usingBundle ? 0 : (selectedRide.routes?.price || 0),
         scheduled_date: selectedRide.ride_date,
         scheduled_time: selectedRide.departure_time,
-        status: asWaitlist ? 'waitlist' : 'pending',
+        status: asWaitlist ? 'waitlist' : (usingBundle ? 'confirmed' : 'pending'),
         payment_proof_url: proofUrl,
         waitlist_position: waitlistPos,
+        custom_pickup_lat: pickupLat,
+        custom_pickup_lng: pickupLng,
+        custom_pickup_name: pickupName,
+        custom_dropoff_lat: dropoffLat,
+        custom_dropoff_lng: dropoffLng,
+        custom_dropoff_name: dropoffName,
       };
-
-      // Pickup
-      if (pickupMode === 'start') {
-        bookingData.custom_pickup_lat = selectedRide.routes.origin_lat;
-        bookingData.custom_pickup_lng = selectedRide.routes.origin_lng;
-        bookingData.custom_pickup_name = lang === 'ar' ? selectedRide.routes.origin_name_ar : selectedRide.routes.origin_name_en;
-      } else if (customPickup) {
-        bookingData.custom_pickup_lat = customPickup.lat;
-        bookingData.custom_pickup_lng = customPickup.lng;
-        bookingData.custom_pickup_name = customPickup.name;
-      }
-
-      // Dropoff
-      if (dropoffMode === 'end') {
-        bookingData.custom_dropoff_lat = selectedRide.routes.destination_lat;
-        bookingData.custom_dropoff_lng = selectedRide.routes.destination_lng;
-        bookingData.custom_dropoff_name = lang === 'ar' ? selectedRide.routes.destination_name_ar : selectedRide.routes.destination_name_en;
-      } else if (customDropoff) {
-        bookingData.custom_dropoff_lat = customDropoff.lat;
-        bookingData.custom_dropoff_lng = customDropoff.lng;
-        bookingData.custom_dropoff_name = customDropoff.name;
-      }
 
       const { error } = await supabase.from('bookings').insert(bookingData);
       if (error) throw error;
+
+      // Deduct from bundle if using one
+      if (usingBundle && activeBundlePurchase) {
+        await supabase.from('bundle_purchases').update({
+          rides_remaining: activeBundlePurchase.rides_remaining - 1,
+        }).eq('id', activeBundlePurchase.id);
+      }
 
       if (!asWaitlist) {
         await supabase.from('ride_instances').update({
@@ -377,12 +403,39 @@ const BookRide = () => {
         }).eq('id', selectedRide.id);
       }
 
+      // Save location for future use
+      if (user && selectedRide.route_id) {
+        const existing = savedLocations.find(sl =>
+          sl.pickup_lat === pickupLat && sl.pickup_lng === pickupLng &&
+          sl.dropoff_lat === dropoffLat && sl.dropoff_lng === dropoffLng
+        );
+        if (existing) {
+          await supabase.from('saved_locations').update({ use_count: existing.use_count + 1 }).eq('id', existing.id);
+        } else {
+          await supabase.from('saved_locations').insert({
+            user_id: user.id,
+            route_id: selectedRide.route_id,
+            pickup_lat: pickupLat,
+            pickup_lng: pickupLng,
+            pickup_name: pickupName,
+            dropoff_lat: dropoffLat,
+            dropoff_lng: dropoffLng,
+            dropoff_name: dropoffName,
+            label: `${pickupName} → ${dropoffName}`,
+          });
+        }
+      }
+
       toast({
         title: asWaitlist
           ? (lang === 'ar' ? 'تم إضافتك لقائمة الانتظار' : 'Added to waitlist')
+          : usingBundle
+          ? (lang === 'ar' ? 'تم الحجز من الباقة' : 'Booked from bundle')
           : (lang === 'ar' ? 'تم الحجز بنجاح' : 'Booking submitted'),
         description: asWaitlist
           ? (lang === 'ar' ? `ترتيبك: #${waitlistPos}` : `Your position: #${waitlistPos}`)
+          : usingBundle
+          ? (lang === 'ar' ? `متبقي ${activeBundlePurchase!.rides_remaining - 1} رحلة` : `${activeBundlePurchase!.rides_remaining - 1} rides remaining`)
           : (lang === 'ar' ? 'في انتظار موافقة المسؤول' : 'Waiting for admin approval'),
       });
       navigate('/my-bookings');
@@ -392,6 +445,89 @@ const BookRide = () => {
       setLoading(false);
       setUploadingProof(false);
     }
+  };
+
+  // --- Buy Bundle ---
+  const handleBuyBundle = async (bundle: any) => {
+    if (!user || !paymentProof) {
+      toast({ title: lang === 'ar' ? 'أرفق إثبات الدفع' : 'Attach payment proof', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      let proofUrl: string | null = null;
+      if (paymentProof) {
+        const ext = paymentProof.name.split('.').pop();
+        const filePath = `${user.id}/bundle_${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage.from('instapay-proofs').upload(filePath, paymentProof);
+        if (uploadErr) throw uploadErr;
+        const { data: urlData } = supabase.storage.from('instapay-proofs').getPublicUrl(filePath);
+        proofUrl = urlData?.publicUrl || filePath;
+      }
+
+      const expiresAt = new Date();
+      if (bundle.bundle_type === 'weekly') expiresAt.setDate(expiresAt.getDate() + 7);
+      else expiresAt.setDate(expiresAt.getDate() + 30);
+
+      const { error } = await supabase.from('bundle_purchases').insert({
+        user_id: user.id,
+        bundle_id: bundle.id,
+        route_id: bundle.route_id,
+        rides_remaining: bundle.ride_count,
+        rides_total: bundle.ride_count,
+        expires_at: expiresAt.toISOString(),
+        status: 'active',
+        payment_proof_url: proofUrl,
+      });
+      if (error) throw error;
+
+      toast({
+        title: lang === 'ar' ? 'تم شراء الباقة!' : 'Bundle purchased!',
+        description: lang === 'ar' ? `${bundle.ride_count} رحلة متاحة` : `${bundle.ride_count} rides available`,
+      });
+
+      // Refresh bundle purchase
+      const { data: purchases } = await supabase.from('bundle_purchases').select('*')
+        .eq('user_id', user.id).eq('route_id', bundle.route_id).eq('status', 'active')
+        .gt('rides_remaining', 0).gt('expires_at', new Date().toISOString()).limit(1);
+      setActiveBundlePurchase(purchases?.[0] || null);
+      setPaymentProof(null);
+      setPaymentPreview(null);
+      setShowBundleSection(false);
+    } catch (error: any) {
+      toast({ title: t('auth.error'), description: error.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Apply saved location
+  const applySavedLocation = (saved: any) => {
+    if (saved.pickup_lat && saved.pickup_lng) {
+      const isDefaultPickup = saved.pickup_lat === selectedRide?.routes?.origin_lat && saved.pickup_lng === selectedRide?.routes?.origin_lng;
+      if (isDefaultPickup) {
+        setPickupMode('start');
+        setCustomPickup(null);
+        setPickupResult(null);
+      } else {
+        setPickupMode('nearby');
+        setCustomPickup({ lat: saved.pickup_lat, lng: saved.pickup_lng, name: saved.pickup_name });
+        setPickupResult({ ok: true, minutes: 0, onRoute: true });
+      }
+    }
+    if (saved.dropoff_lat && saved.dropoff_lng) {
+      const isDefaultDropoff = saved.dropoff_lat === selectedRide?.routes?.destination_lat && saved.dropoff_lng === selectedRide?.routes?.destination_lng;
+      if (isDefaultDropoff) {
+        setDropoffMode('end');
+        setCustomDropoff(null);
+        setDropoffResult(null);
+      } else {
+        setDropoffMode('nearby');
+        setCustomDropoff({ lat: saved.dropoff_lat, lng: saved.dropoff_lng, name: saved.dropoff_name });
+        setDropoffResult({ ok: true, minutes: 0, onRoute: true });
+      }
+    }
+    toast({ title: lang === 'ar' ? 'تم تطبيق الموقع المحفوظ' : 'Saved location applied' });
   };
 
   const dateOptions = getDateOptions();
@@ -773,75 +909,221 @@ const BookRide = () => {
               </div>
             </div>
 
+            {/* Saved Locations */}
+            {savedLocations.length > 0 && (
+              <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <History className="w-4 h-4 text-primary" />
+                  {lang === 'ar' ? 'المواقع السابقة' : 'Previous Locations'}
+                </h3>
+                <div className="space-y-2">
+                  {savedLocations.map((sl) => (
+                    <button
+                      key={sl.id}
+                      onClick={() => applySavedLocation(sl)}
+                      className="w-full text-start bg-surface hover:bg-muted rounded-xl p-3 transition-colors border border-border"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Bookmark className="w-4 h-4 text-secondary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {sl.pickup_name} → {sl.dropoff_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {lang === 'ar' ? `استُخدم ${sl.use_count} مرة` : `Used ${sl.use_count} time${sl.use_count > 1 ? 's' : ''}`}
+                          </p>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Pickup */}
             {renderPointSelector('pickup', pickupMode, setPickupMode, customPickup, validatingPickup, pickupResult)}
 
             {/* Dropoff */}
             {renderPointSelector('dropoff', dropoffMode, setDropoffMode, customDropoff, validatingDropoff, dropoffResult)}
 
-            {/* InstaPay Payment */}
-            <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
-              <h3 className="font-semibold text-foreground flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-primary" />
-                {lang === 'ar' ? 'الدفع عبر InstaPay' : 'Pay via InstaPay'}
-              </h3>
-              <div className="bg-surface rounded-xl p-4 text-sm text-muted-foreground space-y-2">
-                <p>{lang === 'ar' ? 'حوّل المبلغ عبر InstaPay ثم ارفع لقطة شاشة للتحويل:' : 'Transfer the amount via InstaPay then upload a screenshot:'}</p>
-                <p className="font-bold text-foreground text-lg">{selectedRide.routes?.price} EGP</p>
-                {instapayPhone && (
-                  <div className="flex items-center gap-2 bg-card border border-border rounded-lg p-3 mt-2">
-                    <Phone className="w-5 h-5 text-primary shrink-0" />
+            {/* Active Bundle */}
+            {activeBundlePurchase && (
+              <div className="bg-card border-2 border-secondary rounded-2xl p-5 space-y-3">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <Package className="w-4 h-4 text-secondary" />
+                  {lang === 'ar' ? 'لديك باقة نشطة!' : 'You have an active bundle!'}
+                </h3>
+                <div className="bg-secondary/10 rounded-xl p-4">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'حوّل إلى هذا الرقم:' : 'Transfer to this number:'}</p>
-                      <p className="font-bold text-foreground text-lg font-mono" dir="ltr">{instapayPhone}</p>
+                      <p className="text-sm text-muted-foreground">{lang === 'ar' ? 'رحلات متبقية' : 'Rides remaining'}</p>
+                      <p className="text-2xl font-bold text-secondary">{activeBundlePurchase.rides_remaining}/{activeBundlePurchase.rides_total}</p>
+                    </div>
+                    <div className="text-end">
+                      <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'تنتهي في' : 'Expires'}</p>
+                      <p className="text-sm font-medium text-foreground">{new Date(activeBundlePurchase.expires_at).toLocaleDateString()}</p>
                     </div>
                   </div>
-                )}
-                <p className="text-xs">{lang === 'ar' ? 'سيتم مراجعة الدفع من قبل المسؤول' : 'Payment will be reviewed by admin'}</p>
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePaymentFile}
-              />
-
-              {paymentPreview ? (
-                <div className="space-y-2">
-                  <img src={paymentPreview} alt="Payment proof" className="w-full h-48 object-contain rounded-lg border border-border bg-muted" />
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => fileInputRef.current?.click()}>
-                    <Upload className="w-4 h-4 me-1" />
-                    {lang === 'ar' ? 'تغيير الصورة' : 'Change Image'}
-                  </Button>
                 </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="w-full h-24 border-dashed border-2 flex-col gap-2"
-                  onClick={() => fileInputRef.current?.click()}
+                <button
+                  onClick={() => setUseBundle(!useBundle)}
+                  className={`w-full px-4 py-3 rounded-xl text-sm font-medium border-2 transition-colors ${
+                    useBundle
+                      ? 'bg-secondary text-secondary-foreground border-secondary'
+                      : 'bg-card text-foreground border-border hover:border-secondary'
+                  }`}
                 >
-                  <Upload className="w-6 h-6 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    {lang === 'ar' ? 'ارفع لقطة شاشة InstaPay' : 'Upload InstaPay Screenshot'}
+                  {useBundle
+                    ? (lang === 'ar' ? '✓ سيتم الخصم من الباقة' : '✓ Using bundle ride')
+                    : (lang === 'ar' ? 'استخدم رحلة من الباقة' : 'Use a bundle ride')}
+                </button>
+              </div>
+            )}
+
+            {/* Available Bundles */}
+            {availableBundles.length > 0 && !activeBundlePurchase && (
+              <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+                <button
+                  onClick={() => setShowBundleSection(!showBundleSection)}
+                  className="w-full flex items-center justify-between"
+                >
+                  <h3 className="font-semibold text-foreground flex items-center gap-2">
+                    <Package className="w-4 h-4 text-secondary" />
+                    {lang === 'ar' ? 'باقات مخفضة' : 'Discounted Bundles'}
+                  </h3>
+                  <span className="text-xs text-secondary font-medium">
+                    {lang === 'ar' ? `وفّر حتى ${Math.max(...availableBundles.map((b: any) => b.discount_percentage))}%` : `Save up to ${Math.max(...availableBundles.map((b: any) => b.discount_percentage))}%`}
                   </span>
-                </Button>
-              )}
-            </div>
+                </button>
+
+                {showBundleSection && (
+                  <div className="space-y-3 pt-2">
+                    {availableBundles.map((bundle: any) => {
+                      const singlePrice = selectedRide.routes?.price || 0;
+                      const bundlePricePerRide = bundle.price / bundle.ride_count;
+                      const savings = (singlePrice * bundle.ride_count) - bundle.price;
+                      return (
+                        <div key={bundle.id} className="bg-surface rounded-xl p-4 border border-border space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-bold text-foreground">
+                                {bundle.bundle_type === 'weekly'
+                                  ? (lang === 'ar' ? 'باقة أسبوعية' : 'Weekly Bundle')
+                                  : (lang === 'ar' ? 'باقة شهرية' : 'Monthly Bundle')}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {bundle.ride_count} {lang === 'ar' ? 'رحلة' : 'rides'}
+                              </p>
+                            </div>
+                            <div className="text-end">
+                              <p className="text-xl font-bold text-primary">{bundle.price} EGP</p>
+                              <p className="text-xs text-muted-foreground line-through">{singlePrice * bundle.ride_count} EGP</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="bg-secondary/10 text-secondary font-medium px-2 py-1 rounded-full">
+                              {lang === 'ar' ? `وفّر ${savings} جنيه` : `Save ${savings} EGP`}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {lang === 'ar' ? `${bundlePricePerRide.toFixed(0)} جنيه/رحلة` : `${bundlePricePerRide.toFixed(0)} EGP/ride`}
+                            </span>
+                          </div>
+                          <Button
+                            className="w-full"
+                            variant="secondary"
+                            size="sm"
+                            disabled={loading || !paymentProof}
+                            onClick={() => handleBuyBundle(bundle)}
+                          >
+                            <Package className="w-4 h-4 me-1" />
+                            {lang === 'ar' ? 'شراء الباقة' : 'Buy Bundle'}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                    <p className="text-xs text-muted-foreground text-center">
+                      {lang === 'ar' ? 'ارفع إثبات الدفع أدناه ثم اضغط "شراء الباقة"' : 'Upload payment proof below then click "Buy Bundle"'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* InstaPay Payment — hidden when using bundle */}
+            {!useBundle && (
+              <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-primary" />
+                  {lang === 'ar' ? 'الدفع عبر InstaPay' : 'Pay via InstaPay'}
+                </h3>
+                <div className="bg-surface rounded-xl p-4 text-sm text-muted-foreground space-y-2">
+                  <p>{lang === 'ar' ? 'حوّل المبلغ عبر InstaPay ثم ارفع لقطة شاشة للتحويل:' : 'Transfer the amount via InstaPay then upload a screenshot:'}</p>
+                  <p className="font-bold text-foreground text-lg">{selectedRide.routes?.price} EGP</p>
+                  {instapayPhone && (
+                    <div className="flex items-center gap-2 bg-card border border-border rounded-lg p-3 mt-2">
+                      <Phone className="w-5 h-5 text-primary shrink-0" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'حوّل إلى هذا الرقم:' : 'Transfer to this number:'}</p>
+                        <p className="font-bold text-foreground text-lg font-mono" dir="ltr">{instapayPhone}</p>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs">{lang === 'ar' ? 'سيتم مراجعة الدفع من قبل المسؤول' : 'Payment will be reviewed by admin'}</p>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePaymentFile}
+                />
+
+                {paymentPreview ? (
+                  <div className="space-y-2">
+                    <img src={paymentPreview} alt="Payment proof" className="w-full h-48 object-contain rounded-lg border border-border bg-muted" />
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="w-4 h-4 me-1" />
+                      {lang === 'ar' ? 'تغيير الصورة' : 'Change Image'}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full h-24 border-dashed border-2 flex-col gap-2"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="w-6 h-6 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {lang === 'ar' ? 'ارفع لقطة شاشة InstaPay' : 'Upload InstaPay Screenshot'}
+                    </span>
+                  </Button>
+                )}
+              </div>
+            )}
 
             {/* Summary & Book */}
             <div className="bg-card border border-border rounded-2xl p-5">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">{lang === 'ar' ? 'مقعد واحد' : '1 Seat'}</span>
-                <span className="text-lg font-bold text-primary">{selectedRide.routes?.price} EGP</span>
+                {useBundle ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground line-through">{selectedRide.routes?.price} EGP</span>
+                    <span className="text-lg font-bold text-secondary">{lang === 'ar' ? 'من الباقة' : 'Bundle'}</span>
+                  </div>
+                ) : (
+                  <span className="text-lg font-bold text-primary">{selectedRide.routes?.price} EGP</span>
+                )}
               </div>
 
               {!isRideFull ? (
                 <Button className="w-full mt-3" size="lg" onClick={() => handleBook(false)}
-                  disabled={loading || !isPickupValid || !isDropoffValid || !paymentProof}>
+                  disabled={loading || !isPickupValid || !isDropoffValid || (!useBundle && !paymentProof)}>
                   {loading ? (
                     <><Loader2 className="w-4 h-4 me-1 animate-spin" />{lang === 'ar' ? 'جاري الحجز...' : 'Booking...'}</>
+                  ) : useBundle ? (
+                    <><Package className="w-4 h-4 me-1" />{lang === 'ar' ? 'احجز من الباقة' : 'Book from Bundle'}</>
                   ) : (
                     lang === 'ar' ? 'تأكيد الحجز' : 'Confirm Booking'
                   )}
