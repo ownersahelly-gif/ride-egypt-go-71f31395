@@ -452,7 +452,10 @@ const DriverDashboard = () => {
             {/* ==================== SCHEDULE TAB ==================== */}
             {tab === 'schedule' && (
               <div className="space-y-4">
-                {/* Current schedules */}
+                <div className="text-center mb-2">
+                  <h2 className="text-lg font-bold text-foreground">{lang === 'ar' ? 'اختر المسار الذي تريد الذهاب إليه' : 'Choose the route you want to go to'}</h2>
+                  <p className="text-sm text-muted-foreground">{lang === 'ar' ? 'اختر مسار ثم حدد أيام وأوقات العمل' : 'Select a route then set your working days and times'}</p>
+                </div>
                 {driverSchedules.length > 0 && (
                   <div className="space-y-3">
                     {Object.entries(
