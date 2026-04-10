@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -11,7 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 import BottomNav from '@/components/BottomNav';
 import MapView from '@/components/MapView';
 import {
-  ChevronLeft, ChevronRight, MapPin, Check, X, MessageCircle, Send, User, Trash2
+  ChevronLeft, ChevronRight, MapPin, Check, X, MessageCircle, Send, User, Trash2,
+  Phone, Play, Square, Navigation
 } from 'lucide-react';
 
 const CarpoolManage = () => {
@@ -28,11 +29,32 @@ const CarpoolManage = () => {
   const [profiles, setProfiles] = useState<Record<string, any>>({});
   const [newMsg, setNewMsg] = useState('');
   const [loading, setLoading] = useState(true);
+  const [rideStarted, setRideStarted] = useState(false);
+  const watchIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!id || !user) return;
     fetchData();
   }, [id, user]);
+
+  // Realtime chat
+  useEffect(() => {
+    if (!id) return;
+    const chan = supabase
+      .channel(`carpool-chat-${id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'carpool_messages', filter: `route_id=eq.${id}` }, (payload) => {
+        const msg = payload.new as any;
+        setMessages(prev => [...prev, msg]);
+        // Fetch profile if missing
+        if (!profiles[msg.sender_id]) {
+          supabase.from('profiles').select('*').eq('user_id', msg.sender_id).maybeSingle().then(({ data }) => {
+            if (data) setProfiles(prev => ({ ...prev, [data.user_id]: data }));
+          });
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(chan); };
+  }, [id, profiles]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -77,9 +99,56 @@ const CarpoolManage = () => {
     if (!newMsg.trim() || !user) return;
     await supabase.from('carpool_messages').insert({ route_id: id, sender_id: user.id, message: newMsg.trim() });
     setNewMsg('');
-    const { data } = await supabase.from('carpool_messages').select('*').eq('route_id', id).order('created_at');
-    setMessages(data || []);
   };
+
+  // Start/stop ride with live location broadcasting via Supabase Realtime Broadcast
+  const startRide = () => {
+    if (!navigator.geolocation || !id) return;
+    setRideStarted(true);
+    // Notify passengers via a chat message
+    supabase.from('carpool_messages').insert({
+      route_id: id,
+      sender_id: user!.id,
+      message: lang === 'ar' ? '🚗 تم بدء الرحلة! أنا في الطريق لاصطحابكم.' : '🚗 Ride started! I\'m on my way to pick you all up.',
+    });
+
+    const channel = supabase.channel(`driver-location-${id}`);
+    channel.subscribe();
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        channel.send({
+          type: 'broadcast',
+          event: 'location',
+          payload: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+        });
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 3000 }
+    );
+  };
+
+  const stopRide = () => {
+    setRideStarted(false);
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    supabase.removeChannel(supabase.channel(`driver-location-${id}`));
+    supabase.from('carpool_messages').insert({
+      route_id: id,
+      sender_id: user!.id,
+      message: lang === 'ar' ? '✅ تم إنهاء الرحلة. شكراً للجميع!' : '✅ Ride ended. Thanks everyone!',
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
   if (!route) return null;
@@ -88,11 +157,10 @@ const CarpoolManage = () => {
   const acceptedReqs = requests.filter(r => r.status === 'accepted');
 
   const mapMarkers = [
-    { lat: route.origin_lat, lng: route.origin_lng, label: lang === 'ar' ? 'انطلاق' : 'Start', color: 'green' as const },
-    { lat: route.destination_lat, lng: route.destination_lng, label: lang === 'ar' ? 'وصول' : 'End', color: 'red' as const },
+    { lat: route.origin_lat, lng: route.origin_lng, color: 'green' as const },
+    { lat: route.destination_lat, lng: route.destination_lng, color: 'red' as const },
     ...acceptedReqs.map(r => ({
       lat: r.pickup_lat, lng: r.pickup_lng,
-      label: profiles[r.user_id]?.full_name?.slice(0, 10) || 'P',
       color: 'orange' as const,
     })),
   ];
@@ -105,7 +173,6 @@ const CarpoolManage = () => {
         <p className="text-sm text-primary-foreground/70 truncate">{route.origin_name} → {route.destination_name}</p>
       </div>
 
-      {/* Route map with directions */}
       <div className="h-48">
         <MapView
           markers={mapMarkers}
@@ -117,6 +184,31 @@ const CarpoolManage = () => {
       </div>
 
       <div className="p-4 space-y-4">
+        {/* Start/Stop Ride */}
+        {acceptedReqs.length > 0 && (
+          <Card className={rideStarted ? 'border-green-500 bg-green-500/5' : ''}>
+            <CardContent className="p-4">
+              {!rideStarted ? (
+                <Button className="w-full" onClick={startRide}>
+                  <Play className="w-4 h-4 mr-2" />
+                  {lang === 'ar' ? 'بدء الرحلة وإرسال موقعي المباشر' : 'Start Ride & Share Live Location'}
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-green-600">
+                    <Navigation className="w-4 h-4 animate-pulse" />
+                    <span className="text-sm font-medium">{lang === 'ar' ? 'الرحلة جارية — موقعك يُبث مباشرة' : 'Ride in progress — sharing live location'}</span>
+                  </div>
+                  <Button variant="destructive" className="w-full" onClick={stopRide}>
+                    <Square className="w-4 h-4 mr-2" />
+                    {lang === 'ar' ? 'إنهاء الرحلة' : 'End Ride'}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Pending Requests */}
         <Card>
           <CardHeader>
@@ -135,6 +227,11 @@ const CarpoolManage = () => {
                   <div className="flex items-center gap-2 mb-2">
                     <User className="w-4 h-4 text-muted-foreground" />
                     <p className="text-sm font-medium">{profiles[req.user_id]?.full_name || (lang === 'ar' ? 'مستخدم' : 'User')}</p>
+                    {profiles[req.user_id]?.phone && (
+                      <a href={`tel:${profiles[req.user_id].phone}`} className="text-primary" onClick={e => e.stopPropagation()}>
+                        <Phone className="w-3.5 h-3.5" />
+                      </a>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     <MapPin className="w-3 h-3 inline mr-1" />{req.pickup_name} → {req.dropoff_name}
@@ -167,6 +264,11 @@ const CarpoolManage = () => {
                     <div>
                       <p className="text-sm font-medium">{profiles[req.user_id]?.full_name || 'User'}</p>
                       <p className="text-xs text-muted-foreground">{req.pickup_name} → {req.dropoff_name}</p>
+                      {profiles[req.user_id]?.phone && (
+                        <a href={`tel:${profiles[req.user_id].phone}`} className="text-xs text-primary flex items-center gap-1 mt-0.5" onClick={e => e.stopPropagation()}>
+                          <Phone className="w-3 h-3" />{profiles[req.user_id].phone}
+                        </a>
+                      )}
                     </div>
                     <Badge>{lang === 'ar' ? 'مقبول' : 'Accepted'}</Badge>
                   </div>

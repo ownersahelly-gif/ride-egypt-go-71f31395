@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import BottomNav from '@/components/BottomNav';
 import {
   ChevronLeft, ChevronRight, MapPin, Clock, Users, Fuel,
-  RefreshCw, MessageCircle, Send, User
+  RefreshCw, MessageCircle, Send, User, Phone, Navigation
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
@@ -30,6 +30,7 @@ const CarpoolRoute = () => {
   const [owner, setOwner] = useState<any>(null);
   const [myRequest, setMyRequest] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, any>>({});
   const [newMsg, setNewMsg] = useState('');
   const [loading, setLoading] = useState(true);
   const [pickup, setPickup] = useState<{ name: string; lat: number; lng: number } | null>(null);
@@ -37,11 +38,42 @@ const CarpoolRoute = () => {
   const [requestMsg, setRequestMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [verification, setVerification] = useState<any>(null);
+  const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!id || !user) return;
     fetchData();
   }, [id, user]);
+
+  // Listen for live driver location via broadcast
+  useEffect(() => {
+    if (!id || myRequest?.status !== 'accepted') return;
+    const channel = supabase
+      .channel(`driver-location-${id}`)
+      .on('broadcast', { event: 'location' }, (payload) => {
+        setDriverLocation(payload.payload as { lat: number; lng: number });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, myRequest?.status]);
+
+  // Realtime chat
+  useEffect(() => {
+    if (!id || myRequest?.status !== 'accepted') return;
+    const chan = supabase
+      .channel(`carpool-chat-passenger-${id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'carpool_messages', filter: `route_id=eq.${id}` }, (payload) => {
+        const msg = payload.new as any;
+        setMessages(prev => [...prev, msg]);
+        if (!profiles[msg.sender_id]) {
+          supabase.from('profiles').select('*').eq('user_id', msg.sender_id).maybeSingle().then(({ data }) => {
+            if (data) setProfiles(prev => ({ ...prev, [data.user_id]: data }));
+          });
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(chan); };
+  }, [id, myRequest?.status, profiles]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -60,10 +92,18 @@ const CarpoolRoute = () => {
       setOwner(ownerData);
     }
 
-    // Load messages if accepted
     if (requestRes.data?.status === 'accepted') {
       const { data: msgs } = await supabase.from('carpool_messages').select('*').eq('route_id', id).order('created_at');
       setMessages(msgs || []);
+      // Fetch all chat profiles
+      const senderIds = new Set<string>();
+      msgs?.forEach((m: any) => senderIds.add(m.sender_id));
+      if (senderIds.size > 0) {
+        const { data: profs } = await supabase.from('profiles').select('*').in('user_id', Array.from(senderIds));
+        const map: Record<string, any> = {};
+        profs?.forEach(p => { map[p.user_id] = p; });
+        setProfiles(map);
+      }
     }
 
     setLoading(false);
@@ -99,16 +139,12 @@ const CarpoolRoute = () => {
 
   const sendMessage = async () => {
     if (!newMsg.trim() || !user) return;
-    const { error } = await supabase.from('carpool_messages').insert({
+    await supabase.from('carpool_messages').insert({
       route_id: id,
       sender_id: user.id,
       message: newMsg.trim(),
     });
-    if (!error) {
-      setNewMsg('');
-      const { data } = await supabase.from('carpool_messages').select('*').eq('route_id', id).order('created_at');
-      setMessages(data || []);
-    }
+    setNewMsg('');
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
@@ -118,27 +154,34 @@ const CarpoolRoute = () => {
   const isVerified = verification?.status === 'approved';
   const dayNames = lang === 'ar' ? ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  const mapMarkers = [
+    { lat: route.origin_lat, lng: route.origin_lng, color: 'green' as const },
+    { lat: route.destination_lat, lng: route.destination_lng, color: 'red' as const },
+    ...(driverLocation ? [{ lat: driverLocation.lat, lng: driverLocation.lng, color: 'blue' as const }] : []),
+  ];
+
   return (
     <div className="min-h-screen bg-background pb-20" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      {/* Header */}
       <div className="bg-primary text-primary-foreground px-4 pt-12 pb-4">
         <button onClick={() => navigate('/carpool')} className="mb-3"><Back className="w-6 h-6" /></button>
         <h1 className="text-lg font-bold">{lang === 'ar' ? 'تفاصيل الرحلة' : 'Ride Details'}</h1>
       </div>
 
-      {/* Map with driving directions */}
-      <div className="h-56">
+      <div className="h-56 relative">
         <MapView
-          center={{ lat: route.origin_lat, lng: route.origin_lng }}
+          center={driverLocation || { lat: route.origin_lat, lng: route.origin_lng }}
           origin={{ lat: route.origin_lat, lng: route.origin_lng }}
           destination={{ lat: route.destination_lat, lng: route.destination_lng }}
           showDirections
-          markers={[
-            { lat: route.origin_lat, lng: route.origin_lng, label: lang === 'ar' ? 'انطلاق' : 'Start', color: 'green' },
-            { lat: route.destination_lat, lng: route.destination_lng, label: lang === 'ar' ? 'وصول' : 'End', color: 'red' },
-          ]}
+          markers={mapMarkers}
           zoom={11}
         />
+        {driverLocation && (
+          <div className="absolute top-2 left-2 right-2 bg-green-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 z-10 shadow">
+            <Navigation className="w-3.5 h-3.5 animate-pulse" />
+            {lang === 'ar' ? 'السائق في الطريق إليك!' : 'Driver is on the way!'}
+          </div>
+        )}
       </div>
 
       <div className="p-4 space-y-4">
@@ -173,16 +216,22 @@ const CarpoolRoute = () => {
           </CardContent>
         </Card>
 
-        {/* Owner */}
+        {/* Owner with phone */}
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
               <User className="w-5 h-5 text-muted-foreground" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="font-medium text-sm">{owner?.full_name || (lang === 'ar' ? 'مستخدم' : 'User')}</p>
               <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'صاحب الرحلة' : 'Ride owner'}</p>
             </div>
+            {owner?.phone && myRequest?.status === 'accepted' && (
+              <a href={`tel:${owner.phone}`} className="flex items-center gap-1.5 text-sm text-primary bg-primary/10 px-3 py-1.5 rounded-lg">
+                <Phone className="w-4 h-4" />
+                {owner.phone}
+              </a>
+            )}
           </CardContent>
         </Card>
 
@@ -257,6 +306,7 @@ const CarpoolRoute = () => {
                 {messages.map(m => (
                   <div key={m.id} className={`flex ${m.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${m.sender_id === user?.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                      {m.sender_id !== user?.id && <p className="text-[10px] font-medium mb-0.5">{profiles[m.sender_id]?.full_name || 'User'}</p>}
                       {m.message}
                     </div>
                   </div>

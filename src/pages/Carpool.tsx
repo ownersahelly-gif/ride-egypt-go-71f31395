@@ -212,8 +212,8 @@ const Carpool = () => {
   const myRoutes = routes.filter(r => r.user_id === user?.id);
 
   const mapMarkers = sortedRoutes.flatMap(r => [
-    { lat: r.origin_lat, lng: r.origin_lng, label: r.origin_name?.split(',')[0]?.slice(0, 12) || '', color: 'green' as const },
-    { lat: r.destination_lat, lng: r.destination_lng, label: r.destination_name?.split(',')[0]?.slice(0, 12) || '', color: 'red' as const },
+    { lat: r.origin_lat, lng: r.origin_lng, color: 'green' as const },
+    { lat: r.destination_lat, lng: r.destination_lng, color: 'red' as const },
   ]);
 
   const mapConnectionLines = sortedRoutes.map(r => ({
@@ -487,33 +487,47 @@ const Carpool = () => {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center flex-wrap gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {route.departure_time?.slice(0, 5)}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Users className="w-3 h-3" />
-                          {route.available_seats} {lang === 'ar' ? 'مقاعد' : 'seats'}
-                        </span>
-                        {distKm !== null && (
-                          <span className="flex items-center gap-1">
-                            <Navigation className="w-3 h-3" />
-                            {distKm < 1 ? `${Math.round(distKm * 1000)}m` : `${distKm.toFixed(1)}km`}
-                          </span>
-                        )}
-                        {route.is_daily && (
-                          <Badge variant="outline" className="text-[10px]">
-                            {lang === 'ar' ? 'يومي' : 'Daily'}
-                          </Badge>
-                        )}
-                        {route.allow_car_swap && (
-                          <Badge variant="outline" className="text-[10px]">
-                            <RefreshCw className="w-2.5 h-2.5 mr-0.5" />
-                            {lang === 'ar' ? 'تبادل' : 'Swap'}
-                          </Badge>
-                        )}
-                      </div>
+                      {(() => {
+                        const routeDistKm = getDistanceKm(route.origin_lat, route.origin_lng, route.destination_lat, route.destination_lng);
+                        const etaMin = Math.round((routeDistKm / 35) * 60); // ~35 km/h avg Cairo traffic
+                        return (
+                          <div className="flex items-center flex-wrap gap-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {route.departure_time?.slice(0, 5)}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Users className="w-3 h-3" />
+                              {route.available_seats} {lang === 'ar' ? 'مقاعد' : 'seats'}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {routeDistKm.toFixed(1)} km
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              ~{etaMin} {lang === 'ar' ? 'د' : 'min'}
+                            </span>
+                            {distKm !== null && (
+                              <span className="flex items-center gap-1 text-primary">
+                                <Navigation className="w-3 h-3" />
+                                {distKm < 1 ? `${Math.round(distKm * 1000)}m` : `${distKm.toFixed(1)}km`} {lang === 'ar' ? 'منك' : 'away'}
+                              </span>
+                            )}
+                            {route.is_daily && (
+                              <Badge variant="outline" className="text-[10px]">
+                                {lang === 'ar' ? 'يومي' : 'Daily'}
+                              </Badge>
+                            )}
+                            {route.allow_car_swap && (
+                              <Badge variant="outline" className="text-[10px]">
+                                <RefreshCw className="w-2.5 h-2.5 mr-0.5" />
+                                {lang === 'ar' ? 'تبادل' : 'Swap'}
+                              </Badge>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {route.is_daily && route.days_of_week?.length > 0 && (
                         <div className="flex gap-1 mt-2">
                           {route.days_of_week.map((d: number) => (
