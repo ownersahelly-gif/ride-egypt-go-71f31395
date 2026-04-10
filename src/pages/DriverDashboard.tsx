@@ -735,86 +735,197 @@ const DriverDashboard = () => {
             )}
 
             {/* Trips Tab */}
-            {tab === 'trips' && (
-              <div className="space-y-3">
-                <h2 className="text-xl font-bold text-foreground mb-4">{t('driverDash.allBookings')}</h2>
-                {bookings.length === 0 ? (
-                  <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">{t('driverDash.noBookingsYet')}</div>
-                ) : bookings.map(b => (
-                  <div key={b.id} className="bg-card border border-border rounded-xl p-5 space-y-3">
-                    {/* Header: route name, date, status */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-foreground">{lang === 'ar' ? b.routes?.name_ar : b.routes?.name_en}</p>
-                        <p className="text-sm text-muted-foreground">{b.scheduled_date} · {b.scheduled_time}</p>
-                      </div>
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[b.status]}`}>{t(`booking.status.${b.status}`)}</span>
-                    </div>
+            {tab === 'trips' && (() => {
+              // Group bookings by date + route
+              const grouped: Record<string, any[]> = {};
+              bookings.forEach(b => {
+                const key = `${b.scheduled_date}__${b.route_id || 'no-route'}__${b.scheduled_time}`;
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(b);
+              });
 
-                    {/* Pickup & Dropoff Points */}
-                    {(b.custom_pickup_name || b.custom_dropoff_name) && (
-                      <div className="bg-surface rounded-xl p-3 space-y-2">
-                        {b.custom_pickup_name && (
-                          <div className="flex items-start gap-2">
-                            <MapPin className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+              const sortedKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+              return (
+                <div className="space-y-4">
+                  <h2 className="text-xl font-bold text-foreground mb-4">{t('driverDash.allBookings')}</h2>
+                  {sortedKeys.length === 0 ? (
+                    <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">{t('driverDash.noBookingsYet')}</div>
+                  ) : sortedKeys.map(key => {
+                    const group = grouped[key];
+                    const first = group[0];
+                    const routeObj = first.routes;
+                    const isExpanded = expandedTrips.has(key);
+                    const totalSeats = group.reduce((s: number, b: any) => s + (b.seats || 1), 0);
+                    const activeBookings = group.filter((b: any) => b.status !== 'cancelled');
+
+                    // Build optimized waypoints for the map
+                    const routeOrigin = routeObj ? { lat: routeObj.origin_lat, lng: routeObj.origin_lng } : { lat: 30.0444, lng: 31.2357 };
+                    const routeDestination = routeObj ? { lat: routeObj.destination_lat, lng: routeObj.destination_lng } : { lat: 30.06, lng: 31.25 };
+                    const optimizedWaypoints = isExpanded ? optimizePassengerOrder(activeBookings, routeOrigin, routeDestination) : [];
+
+                    // Build map markers from optimized order
+                    const mapMarkers = isExpanded ? [
+                      { lat: routeOrigin.lat, lng: routeOrigin.lng, label: lang === 'ar' ? 'أ' : 'A', color: 'green' as const },
+                      ...optimizedWaypoints.map((wp, i) => ({
+                        lat: wp.coords.lat,
+                        lng: wp.coords.lng,
+                        label: `${i + 1}`,
+                        color: wp.type === 'pickup' ? ('green' as const) : ('red' as const),
+                      })),
+                      { lat: routeDestination.lat, lng: routeDestination.lng, label: lang === 'ar' ? 'ب' : 'B', color: 'red' as const },
+                    ] : [];
+
+                    return (
+                      <div key={key} className="bg-card border border-border rounded-2xl overflow-hidden">
+                        {/* Clickable header */}
+                        <button
+                          onClick={() => toggleTrip(key)}
+                          className="w-full flex items-center justify-between p-5 text-start hover:bg-muted/30 transition-colors"
+                        >
+                          <div className="flex-1">
+                            <p className="font-semibold text-foreground">
+                              {lang === 'ar' ? routeObj?.name_ar : routeObj?.name_en}
+                            </p>
+                            <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{first.scheduled_date}</span>
+                              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{first.scheduled_time}</span>
+                              <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{activeBookings.length} {lang === 'ar' ? 'راكب' : 'passenger'}{activeBookings.length > 1 ? 's' : ''} · {totalSeats} {t('booking.seat')}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[first.status]}`}>
+                              {t(`booking.status.${first.status}`)}
+                            </span>
+                            {isExpanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
+                          </div>
+                        </button>
+
+                        {/* Expanded content */}
+                        {isExpanded && (
+                          <div className="border-t border-border p-5 space-y-4">
+                            {/* Big optimized route map */}
                             <div>
-                              <p className="text-xs font-medium text-muted-foreground">{lang === 'ar' ? 'نقطة الصعود' : 'Pickup Point'}</p>
-                              <p className="text-sm text-foreground">{b.custom_pickup_name}</p>
+                              <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                                <Navigation className="w-4 h-4 text-primary" />
+                                {lang === 'ar' ? 'خريطة الرحلة المُحسّنة' : 'Optimized Trip Map'}
+                              </h4>
+                              <p className="text-xs text-muted-foreground mb-2">
+                                {lang === 'ar' ? 'الترتيب الأفضل لتوفير الوقت والوقود' : 'Best order to save time and fuel'}
+                              </p>
+                              <MapView
+                                className="h-72 sm:h-96"
+                                markers={mapMarkers}
+                                origin={routeOrigin}
+                                destination={routeDestination}
+                                showDirections={true}
+                                showUserLocation={false}
+                                zoom={11}
+                              />
+                            </div>
+
+                            {/* Optimized stop order */}
+                            {optimizedWaypoints.length > 0 && (
+                              <div className="bg-surface rounded-xl p-4">
+                                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                                  <Route className="w-4 h-4 text-primary" />
+                                  {lang === 'ar' ? 'ترتيب التوقفات' : 'Stop Order'}
+                                </h4>
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">A</span>
+                                    <span className="text-foreground font-medium">
+                                      {lang === 'ar' ? routeObj?.origin_name_ar : routeObj?.origin_name_en}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">({lang === 'ar' ? 'نقطة البداية' : 'Start'})</span>
+                                  </div>
+                                  {optimizedWaypoints.map((wp, i) => (
+                                    <div key={i} className="flex items-center gap-2 text-sm ps-2 border-s-2 border-muted ms-3">
+                                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                        wp.type === 'pickup' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                      }`}>{i + 1}</span>
+                                      <span className="text-foreground">{wp.label}</span>
+                                      <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                        wp.type === 'pickup' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
+                                      }`}>
+                                        {wp.type === 'pickup' ? (lang === 'ar' ? 'صعود' : 'Pickup') : (lang === 'ar' ? 'نزول' : 'Dropoff')}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="w-6 h-6 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">B</span>
+                                    <span className="text-foreground font-medium">
+                                      {lang === 'ar' ? routeObj?.destination_name_ar : routeObj?.destination_name_en}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">({lang === 'ar' ? 'نقطة النهاية' : 'End'})</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Passenger list */}
+                            <div>
+                              <h4 className="text-sm font-semibold text-foreground mb-3">
+                                {lang === 'ar' ? 'الركاب' : 'Passengers'}
+                              </h4>
+                              <div className="space-y-2">
+                                {activeBookings.map((b: any) => {
+                                  const passenger = passengerProfiles[b.user_id];
+                                  const name = passenger?.full_name || (lang === 'ar' ? 'راكب' : 'Passenger');
+                                  return (
+                                    <div key={b.id} className="bg-surface rounded-xl p-4 flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                                          <User className="w-4 h-4 text-primary" />
+                                        </div>
+                                        <div>
+                                          <p className="font-medium text-foreground text-sm">{name}</p>
+                                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <span>{b.seats} {t('booking.seat')}</span>
+                                            {b.custom_pickup_name && (
+                                              <span className="flex items-center gap-0.5">
+                                                <MapPin className="w-3 h-3 text-green-500" />{b.custom_pickup_name}
+                                              </span>
+                                            )}
+                                            {b.custom_dropoff_name && (
+                                              <span className="flex items-center gap-0.5">
+                                                <MapPin className="w-3 h-3 text-destructive" />{b.custom_dropoff_name}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setChatBookingId(b.id);
+                                          setChatPassengerName(name);
+                                        }}
+                                      >
+                                        <MessageCircle className="w-4 h-4 text-primary" />
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
                         )}
-                        {b.custom_dropoff_name && (
-                          <div className="flex items-start gap-2">
-                            <MapPin className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
-                            <div>
-                              <p className="text-xs font-medium text-muted-foreground">{lang === 'ar' ? 'نقطة النزول' : 'Dropoff Point'}</p>
-                              <p className="text-sm text-foreground">{b.custom_dropoff_name}</p>
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    )}
+                    );
+                  })}
 
-                    {/* Booking info row */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span><Users className="w-3.5 h-3.5 inline me-1" />{b.seats} {t('booking.seat')}</span>
-                        <span className="font-semibold text-foreground">{b.total_price} EGP</span>
-                        {b.boarding_code && (
-                          <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">#{b.boarding_code}</span>
-                        )}
-                      </div>
-                      {b.status === 'pending' && (
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => updateBookingStatus(b.id, 'confirmed')}>
-                            <CheckCircle2 className="w-3.5 h-3.5 me-1" />{t('driverDash.confirm')}
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => updateBookingStatus(b.id, 'cancelled')}>
-                            <XCircle className="w-3.5 h-3.5 me-1" />{t('driverDash.reject')}
-                          </Button>
-                        </div>
-                      )}
-                      {b.status === 'confirmed' && (
-                        <Button size="sm" variant="outline" onClick={() => updateBookingStatus(b.id, 'completed')}>{t('driverDash.complete')}</Button>
-                      )}
-                    </div>
-
-                    {/* Payment Proof */}
-                    {b.payment_proof_url && (
-                      <div className="border-t border-border pt-3">
-                        <p className="text-xs font-semibold text-muted-foreground mb-2">
-                          <DollarSign className="w-3.5 h-3.5 inline me-1" />
-                          {lang === 'ar' ? 'إثبات الدفع InstaPay' : 'InstaPay Payment Proof'}
-                        </p>
-                        <a href={b.payment_proof_url} target="_blank" rel="noopener noreferrer">
-                          <img src={b.payment_proof_url} alt="Payment proof" className="w-full max-w-xs h-40 object-contain rounded-lg border border-border bg-muted cursor-pointer hover:opacity-80 transition-opacity" />
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                  {/* Chat Modal */}
+                  <RideChat
+                    bookingId={chatBookingId || ''}
+                    otherName={chatPassengerName}
+                    isOpen={!!chatBookingId}
+                    onClose={() => setChatBookingId(null)}
+                  />
+                </div>
+              );
+            })()}
 
             {/* Earnings Tab */}
             {tab === 'earnings' && (() => {
