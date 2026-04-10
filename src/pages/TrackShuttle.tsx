@@ -172,7 +172,7 @@ const TrackShuttle = () => {
       const isMe = b.user_id === user.id;
       const name = isMe
         ? (lang === 'ar' ? 'أنت' : 'You')
-        : (b.profiles?.full_name || (lang === 'ar' ? 'راكب' : 'Passenger'));
+        : (lang === 'ar' ? 'راكب' : 'Passenger');
 
       stops.push({
         userId: b.user_id,
