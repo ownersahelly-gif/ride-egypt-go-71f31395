@@ -207,6 +207,21 @@ const MapView = ({
           />
         )}
         {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers: true }} />}
+        {connectionLine && (
+          <Polyline
+            path={[connectionLine.from, connectionLine.to]}
+            options={{
+              strokeColor: connectionLine.color || '#EF4444',
+              strokeWeight: 3,
+              strokeOpacity: 0.8,
+              icons: [{
+                icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 },
+                offset: '0',
+                repeat: '15px',
+              }],
+            }}
+          />
+        )}
       </GoogleMap>
 
       {showUserLocation && (
