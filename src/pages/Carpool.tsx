@@ -11,10 +11,116 @@ import MapView from '@/components/MapView';
 import {
   Plus, MapPin, Clock, Users, Fuel, RefreshCw, Car,
   ChevronRight, ChevronLeft, Search, Filter, Shield, AlertCircle,
-  Map, List
+  Map, List, X
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+
+const DEMO_ROUTES = [
+  {
+    id: 'demo-1',
+    user_id: 'demo-user-1',
+    origin_name: 'Maadi, Cairo',
+    origin_lat: 29.9602,
+    origin_lng: 31.2569,
+    destination_name: 'Smart Village, 6th October',
+    destination_lat: 30.0711,
+    destination_lng: 31.0175,
+    departure_time: '07:30:00',
+    available_seats: 3,
+    is_daily: true,
+    days_of_week: [0, 1, 2, 3, 4],
+    share_fuel: true,
+    fuel_share_amount: 25,
+    allow_car_swap: true,
+    notes: 'Leaving sharp at 7:30. AC car.',
+    status: 'active',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'demo-2',
+    user_id: 'demo-user-2',
+    origin_name: 'Heliopolis, Cairo',
+    origin_lat: 30.0870,
+    origin_lng: 31.3225,
+    destination_name: 'Cairo University',
+    destination_lat: 30.0261,
+    destination_lng: 31.2118,
+    departure_time: '08:00:00',
+    available_seats: 2,
+    is_daily: true,
+    days_of_week: [0, 1, 2, 3],
+    share_fuel: true,
+    fuel_share_amount: 20,
+    allow_car_swap: false,
+    notes: null,
+    status: 'active',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'demo-3',
+    user_id: 'demo-user-3',
+    origin_name: 'Nasr City, Cairo',
+    origin_lat: 30.0626,
+    origin_lng: 31.3387,
+    destination_name: 'New Cairo, AUC',
+    destination_lat: 30.0194,
+    destination_lng: 31.4998,
+    departure_time: '09:00:00',
+    available_seats: 4,
+    is_daily: false,
+    days_of_week: [],
+    share_fuel: false,
+    fuel_share_amount: 0,
+    allow_car_swap: false,
+    notes: 'One-time trip on Thursday.',
+    status: 'active',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'demo-4',
+    user_id: 'demo-user-4',
+    origin_name: 'Zamalek, Cairo',
+    origin_lat: 30.0609,
+    origin_lng: 31.2194,
+    destination_name: 'New Administrative Capital',
+    destination_lat: 30.0197,
+    destination_lng: 31.7601,
+    departure_time: '06:30:00',
+    available_seats: 3,
+    is_daily: true,
+    days_of_week: [0, 1, 2, 3, 4],
+    share_fuel: true,
+    fuel_share_amount: 40,
+    allow_car_swap: true,
+    notes: 'Daily commute to NAC. Fuel split equally.',
+    status: 'active',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'demo-5',
+    user_id: 'demo-user-5',
+    origin_name: 'Dokki, Giza',
+    origin_lat: 30.0382,
+    origin_lng: 31.2012,
+    destination_name: 'Ain Shams University',
+    destination_lat: 30.0793,
+    destination_lng: 31.2834,
+    departure_time: '07:00:00',
+    available_seats: 2,
+    is_daily: true,
+    days_of_week: [0, 1, 2, 3, 4],
+    share_fuel: true,
+    fuel_share_amount: 15,
+    allow_car_swap: false,
+    notes: null,
+    status: 'active',
+    created_at: new Date().toISOString(),
+  },
+];
 
 const Carpool = () => {
   const { user } = useAuth();
@@ -31,25 +137,22 @@ const Carpool = () => {
   const [tab, setTab] = useState<'browse' | 'my-rides' | 'my-routes'>('browse');
   const [browseMode, setBrowseMode] = useState<'list' | 'map'>('list');
 
+  // Filters
+  const [filterTime, setFilterTime] = useState<string>('');
+  const [filterDay, setFilterDay] = useState<string>('');
+  const [showFilters, setShowFilters] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     fetchData();
   }, [user]);
 
-  // Real-time notifications for carpool requests & acceptances
   useEffect(() => {
     if (!user) return;
-
-    // Listen for new requests on MY routes
     const reqChannel = supabase
       .channel('carpool-req-notifications')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'carpool_requests',
-      }, async (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'carpool_requests' }, async (payload) => {
         const req = payload.new as any;
-        // Check if this request is for one of my routes
         const myRoute = routes.find(r => r.id === req.route_id && r.user_id === user.id);
         if (myRoute) {
           toast({
@@ -61,31 +164,18 @@ const Carpool = () => {
           fetchData();
         }
       })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'carpool_requests',
-      }, async (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'carpool_requests' }, async (payload) => {
         const req = payload.new as any;
-        // If MY request was accepted
         if (req.user_id === user.id && req.status === 'accepted') {
-          toast({
-            title: lang === 'ar' ? '✅ تم قبول طلبك!' : '✅ Request accepted!',
-            description: lang === 'ar' ? 'تم قبول طلب الانضمام للرحلة' : 'Your carpool request was accepted',
-          });
+          toast({ title: lang === 'ar' ? '✅ تم قبول طلبك!' : '✅ Request accepted!' });
           fetchData();
         }
         if (req.user_id === user.id && req.status === 'rejected') {
-          toast({
-            title: lang === 'ar' ? '❌ تم رفض طلبك' : '❌ Request rejected',
-            description: lang === 'ar' ? 'تم رفض طلب الانضمام' : 'Your carpool request was rejected',
-            variant: 'destructive',
-          });
+          toast({ title: lang === 'ar' ? '❌ تم رفض طلبك' : '❌ Request rejected', variant: 'destructive' });
           fetchData();
         }
       })
       .subscribe();
-
     return () => { supabase.removeChannel(reqChannel); };
   }, [user, routes, lang]);
 
@@ -96,7 +186,10 @@ const Carpool = () => {
       supabase.from('carpool_requests').select('*, carpool_routes(*)').eq('user_id', user!.id),
       supabase.from('carpool_verifications').select('*').eq('user_id', user!.id).maybeSingle(),
     ]);
-    setRoutes(routesRes.data || []);
+    const dbRoutes = routesRes.data || [];
+    // Merge demo routes if DB is empty
+    const allRoutes = dbRoutes.length > 0 ? dbRoutes : [...DEMO_ROUTES, ...dbRoutes];
+    setRoutes(allRoutes);
     setMyRequests(requestsRes.data || []);
     setVerification(verRes.data);
     setLoading(false);
@@ -105,24 +198,38 @@ const Carpool = () => {
   const isVerified = verification?.status === 'approved';
   const hasPendingVerification = verification?.status === 'pending';
 
-  const filteredRoutes = routes.filter(r => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    return r.origin_name?.toLowerCase().includes(s) || r.destination_name?.toLowerCase().includes(s);
-  });
-
-  const myRoutes = routes.filter(r => r.user_id === user?.id);
-  const otherRoutes = filteredRoutes.filter(r => r.user_id !== user?.id);
-
   const dayNames = lang === 'ar'
     ? ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت']
     : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  // Map markers for browse view
-  const mapMarkers = otherRoutes.flatMap(r => [
+  const filteredRoutes = routes.filter(r => {
+    if (r.user_id === user?.id) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      if (!r.origin_name?.toLowerCase().includes(s) && !r.destination_name?.toLowerCase().includes(s)) return false;
+    }
+    if (filterTime) {
+      const routeHour = parseInt(r.departure_time?.slice(0, 2) || '0');
+      if (filterTime === 'early' && routeHour >= 8) return false;
+      if (filterTime === 'morning' && (routeHour < 8 || routeHour >= 10)) return false;
+      if (filterTime === 'midday' && (routeHour < 10 || routeHour >= 14)) return false;
+      if (filterTime === 'afternoon' && routeHour < 14) return false;
+    }
+    if (filterDay && filterDay !== 'any') {
+      const dayNum = parseInt(filterDay);
+      if (r.is_daily && r.days_of_week?.length > 0 && !r.days_of_week.includes(dayNum)) return false;
+    }
+    return true;
+  });
+
+  const myRoutes = routes.filter(r => r.user_id === user?.id);
+
+  const mapMarkers = filteredRoutes.flatMap(r => [
     { lat: r.origin_lat, lng: r.origin_lng, label: r.origin_name?.slice(0, 15), color: 'green' as const },
     { lat: r.destination_lat, lng: r.destination_lng, label: r.destination_name?.slice(0, 15), color: 'red' as const },
   ]);
+
+  const hasActiveFilters = !!filterTime || (!!filterDay && filterDay !== 'any');
 
   if (!user) return null;
 
@@ -147,7 +254,6 @@ const Carpool = () => {
           )}
         </div>
 
-        {/* Verification Banner */}
         {!isVerified && (
           <div className="bg-secondary/20 rounded-lg p-3 flex items-start gap-2">
             <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
@@ -191,7 +297,7 @@ const Carpool = () => {
       <div className="p-4 space-y-4">
         {tab === 'browse' && (
           <>
-            {/* Search + View Toggle */}
+            {/* Search + Filter + View Toggle */}
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -203,46 +309,111 @@ const Carpool = () => {
                 />
               </div>
               <Button
+                variant={hasActiveFilters ? 'default' : 'outline'}
+                size="icon"
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <Filter className="w-4 h-4" />
+              </Button>
+              <Button
                 variant="outline"
                 size="icon"
                 onClick={() => setBrowseMode(browseMode === 'list' ? 'map' : 'list')}
-                title={browseMode === 'list' ? 'Map view' : 'List view'}
               >
                 {browseMode === 'list' ? <Map className="w-4 h-4" /> : <List className="w-4 h-4" />}
               </Button>
             </div>
 
+            {/* Filter Panel */}
+            {showFilters && (
+              <Card>
+                <CardContent className="p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{lang === 'ar' ? 'تصفية' : 'Filters'}</p>
+                    {hasActiveFilters && (
+                      <Button variant="ghost" size="sm" onClick={() => { setFilterTime(''); setFilterDay(''); }}>
+                        <X className="w-3 h-3 mr-1" />{lang === 'ar' ? 'مسح' : 'Clear'}
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        {lang === 'ar' ? 'وقت المغادرة' : 'Departure Time'}
+                      </label>
+                      <Select value={filterTime} onValueChange={setFilterTime}>
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue placeholder={lang === 'ar' ? 'أي وقت' : 'Any time'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="early">{lang === 'ar' ? 'مبكر (قبل 8)' : 'Early (before 8am)'}</SelectItem>
+                          <SelectItem value="morning">{lang === 'ar' ? 'صباحي (8-10)' : 'Morning (8-10am)'}</SelectItem>
+                          <SelectItem value="midday">{lang === 'ar' ? 'ظهر (10-2)' : 'Midday (10am-2pm)'}</SelectItem>
+                          <SelectItem value="afternoon">{lang === 'ar' ? 'عصر (بعد 2)' : 'Afternoon (after 2pm)'}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        {lang === 'ar' ? 'يوم الأسبوع' : 'Day of Week'}
+                      </label>
+                      <Select value={filterDay} onValueChange={setFilterDay}>
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue placeholder={lang === 'ar' ? 'أي يوم' : 'Any day'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="any">{lang === 'ar' ? 'أي يوم' : 'Any day'}</SelectItem>
+                          {dayNames.map((name, i) => (
+                            <SelectItem key={i} value={String(i)}>{name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Map View */}
             {browseMode === 'map' && (
               <div className="h-80 rounded-xl overflow-hidden border border-border">
-                <MapView
-                  markers={mapMarkers}
-                  zoom={10}
-                  showUserLocation
-                />
+                <MapView markers={mapMarkers} zoom={10} showUserLocation />
               </div>
             )}
 
-            {/* Route cards or empty state */}
+            {/* Route cards */}
             {loading ? (
               <div className="text-center py-12 text-muted-foreground">
                 {lang === 'ar' ? 'جاري التحميل...' : 'Loading...'}
               </div>
-            ) : otherRoutes.length === 0 ? (
+            ) : filteredRoutes.length === 0 ? (
               <div className="text-center py-12">
                 <Car className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
                 <p className="text-muted-foreground">
-                  {lang === 'ar' ? 'لا توجد رحلات متاحة حالياً' : 'No rides available right now'}
+                  {hasActiveFilters
+                    ? (lang === 'ar' ? 'لا نتائج تطابق الفلاتر' : 'No rides match your filters')
+                    : (lang === 'ar' ? 'لا توجد رحلات متاحة حالياً' : 'No rides available right now')
+                  }
                 </p>
-                {isVerified && (
-                  <Button className="mt-4" onClick={() => navigate('/carpool/post')}>
-                    {lang === 'ar' ? 'كن أول من يضيف رحلة' : 'Be the first to post a ride'}
+                {hasActiveFilters && (
+                  <Button variant="outline" className="mt-3" onClick={() => { setFilterTime(''); setFilterDay(''); }}>
+                    {lang === 'ar' ? 'مسح الفلاتر' : 'Clear filters'}
                   </Button>
                 )}
               </div>
             ) : (
-              otherRoutes.map(route => (
-                <Card key={route.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/carpool/route/${route.id}`)}>
+              filteredRoutes.map(route => (
+                <Card
+                  key={route.id}
+                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => {
+                    if (route.id.startsWith('demo-')) {
+                      toast({ title: lang === 'ar' ? 'تجريبي' : 'Demo', description: lang === 'ar' ? 'هذه رحلة تجريبية' : 'This is a demo ride' });
+                      return;
+                    }
+                    navigate(`/carpool/route/${route.id}`);
+                  }}
+                >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
@@ -256,6 +427,9 @@ const Carpool = () => {
                         </div>
                       </div>
                       <div className="text-right">
+                        {route.id.startsWith('demo-') && (
+                          <Badge variant="outline" className="text-[10px] mb-1">{lang === 'ar' ? 'تجريبي' : 'Demo'}</Badge>
+                        )}
                         {route.share_fuel && route.fuel_share_amount > 0 && (
                           <Badge variant="secondary" className="mb-1">
                             <Fuel className="w-3 h-3 mr-1" />
@@ -317,20 +491,11 @@ const Carpool = () => {
                         {req.carpool_routes?.origin_name} → {req.carpool_routes?.destination_name}
                       </p>
                       <Badge variant={req.status === 'accepted' ? 'default' : req.status === 'pending' ? 'secondary' : 'destructive'}>
-                        {req.status === 'accepted'
-                          ? (lang === 'ar' ? 'مقبول' : 'Accepted')
-                          : req.status === 'pending'
-                            ? (lang === 'ar' ? 'قيد الانتظار' : 'Pending')
-                            : (lang === 'ar' ? 'مرفوض' : 'Rejected')
-                        }
+                        {req.status === 'accepted' ? (lang === 'ar' ? 'مقبول' : 'Accepted') : req.status === 'pending' ? (lang === 'ar' ? 'قيد الانتظار' : 'Pending') : (lang === 'ar' ? 'مرفوض' : 'Rejected')}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {lang === 'ar' ? 'الركوب:' : 'Pickup:'} {req.pickup_name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {lang === 'ar' ? 'النزول:' : 'Dropoff:'} {req.dropoff_name}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'الركوب:' : 'Pickup:'} {req.pickup_name}</p>
+                    <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'النزول:' : 'Dropoff:'} {req.dropoff_name}</p>
                     {req.status === 'accepted' && (
                       <Button size="sm" className="mt-2 w-full" onClick={() => navigate(`/carpool/route/${req.route_id}`)}>
                         {lang === 'ar' ? 'عرض التفاصيل' : 'View Details'}
