@@ -446,38 +446,101 @@ const DriverDashboard = () => {
                       </h3>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {lang === 'ar' ? 'لا تجد المسار اللي عاوزه؟ قولنا نقطة البداية والنهاية وهنراجعه ونضيفه' : "Can't find your route? Tell us the start and end points and we'll review and add it"}
+                      {lang === 'ar' ? 'لا تجد المسار اللي عاوزه؟ حدد نقطة البداية والنهاية على الخريطة' : "Can't find your route? Pick start and end points on the map"}
                     </p>
+
+                    {/* Location inputs with autocomplete */}
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>{lang === 'ar' ? 'نقطة البداية' : 'Starting Point'}</Label>
-                        <Input
-                          placeholder={lang === 'ar' ? 'مثال: مدينتي' : 'e.g. Madinaty'}
+                        <PlacesAutocomplete
+                          placeholder={lang === 'ar' ? 'ابحث عن نقطة البداية...' : 'Search starting point...'}
                           value={routeRequestForm.origin_name}
-                          onChange={e => setRouteRequestForm(p => ({ ...p, origin_name: e.target.value }))}
+                          onSelect={(place) => setRouteRequestForm(p => ({ ...p, origin_name: place.name, origin_lat: place.lat, origin_lng: place.lng }))}
+                          iconColor="text-green-500"
                         />
+                        {routeRequestForm.origin_lat !== 0 && (
+                          <p className="text-xs text-green-600 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> {lang === 'ar' ? 'تم تحديد الموقع' : 'Location set'}
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label>{lang === 'ar' ? 'نقطة النهاية' : 'Destination'}</Label>
-                        <Input
-                          placeholder={lang === 'ar' ? 'مثال: القرية الذكية' : 'e.g. Smart Village'}
+                        <PlacesAutocomplete
+                          placeholder={lang === 'ar' ? 'ابحث عن الوجهة...' : 'Search destination...'}
                           value={routeRequestForm.destination_name}
-                          onChange={e => setRouteRequestForm(p => ({ ...p, destination_name: e.target.value }))}
+                          onSelect={(place) => setRouteRequestForm(p => ({ ...p, destination_name: place.name, destination_lat: place.lat, destination_lng: place.lng }))}
+                          iconColor="text-destructive"
+                        />
+                        {routeRequestForm.destination_lat !== 0 && (
+                          <p className="text-xs text-green-600 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> {lang === 'ar' ? 'تم تحديد الموقع' : 'Location set'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Map with click-to-pick */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>{lang === 'ar' ? 'أو اضغط على الخريطة لتحديد المواقع' : 'Or click on the map to pick locations'}</Label>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant={pickingLocation === 'origin' ? 'default' : 'outline'}
+                            onClick={() => setPickingLocation(pickingLocation === 'origin' ? null : 'origin')}>
+                            <MapPin className="w-3.5 h-3.5 me-1 text-green-500" />
+                            {lang === 'ar' ? 'البداية' : 'Origin'}
+                          </Button>
+                          <Button size="sm" variant={pickingLocation === 'destination' ? 'default' : 'outline'}
+                            onClick={() => setPickingLocation(pickingLocation === 'destination' ? null : 'destination')}>
+                            <MapPin className="w-3.5 h-3.5 me-1 text-destructive" />
+                            {lang === 'ar' ? 'النهاية' : 'Destination'}
+                          </Button>
+                        </div>
+                      </div>
+                      {pickingLocation && (
+                        <p className="text-xs text-primary font-medium animate-pulse">
+                          {pickingLocation === 'origin'
+                            ? (lang === 'ar' ? '👆 اضغط على الخريطة لتحديد نقطة البداية' : '👆 Click on the map to set the starting point')
+                            : (lang === 'ar' ? '👆 اضغط على الخريطة لتحديد الوجهة' : '👆 Click on the map to set the destination')}
+                        </p>
+                      )}
+                      <MapView
+                        className="h-64 sm:h-80"
+                        onMapClick={handleMapClick}
+                        markers={[
+                          ...(routeRequestForm.origin_lat !== 0 ? [{ lat: routeRequestForm.origin_lat, lng: routeRequestForm.origin_lng, label: lang === 'ar' ? 'أ' : 'A', color: 'green' as const }] : []),
+                          ...(routeRequestForm.destination_lat !== 0 ? [{ lat: routeRequestForm.destination_lat, lng: routeRequestForm.destination_lng, label: lang === 'ar' ? 'ب' : 'B', color: 'red' as const }] : []),
+                        ]}
+                        origin={routeRequestForm.origin_lat !== 0 ? { lat: routeRequestForm.origin_lat, lng: routeRequestForm.origin_lng } : undefined}
+                        destination={routeRequestForm.destination_lat !== 0 ? { lat: routeRequestForm.destination_lat, lng: routeRequestForm.destination_lng } : undefined}
+                        showDirections={routeRequestForm.origin_lat !== 0 && routeRequestForm.destination_lat !== 0}
+                        showUserLocation={false}
+                      />
+                    </div>
+
+                    {/* Two time fields: going and returning */}
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{lang === 'ar' ? 'وقت الذهاب (الصباح)' : 'Going Time (Morning)'}</Label>
+                        <Input type="time" value={routeRequestForm.preferred_time_go}
+                          onChange={e => setRouteRequestForm(p => ({ ...p, preferred_time_go: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{lang === 'ar' ? 'وقت العودة (المساء)' : 'Return Time (Evening)'}</Label>
+                        <Input type="time" value={routeRequestForm.preferred_time_return}
+                          onChange={e => setRouteRequestForm(p => ({ ...p, preferred_time_return: e.target.value }))}
                         />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>{lang === 'ar' ? 'الوقت المفضل' : 'Preferred Time'}</Label>
-                      <Input type="time" value={routeRequestForm.preferred_time}
-                        onChange={e => setRouteRequestForm(p => ({ ...p, preferred_time: e.target.value }))}
-                        className="w-48" />
-                    </div>
+
                     <div className="flex gap-2">
                       <Button onClick={submitRouteRequest} disabled={savingRouteRequest || !routeRequestForm.origin_name || !routeRequestForm.destination_name}>
                         {savingRouteRequest ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : <CheckCircle2 className="w-4 h-4 me-1" />}
                         {lang === 'ar' ? 'إرسال الطلب' : 'Submit Request'}
                       </Button>
-                      <Button variant="outline" onClick={() => setShowRouteRequest(false)}>
+                      <Button variant="outline" onClick={() => { setShowRouteRequest(false); setPickingLocation(null); }}>
                         {lang === 'ar' ? 'إلغاء' : 'Cancel'}
                       </Button>
                     </div>
