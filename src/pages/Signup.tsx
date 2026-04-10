@@ -116,11 +116,9 @@ const Signup = () => {
 
   const uploadFile = async (userId: string, file: File, folder: string): Promise<string> => {
     const ext = file.name.split('.').pop();
-    const path = `${userId}/${folder}_${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('driver-documents').upload(path, file);
-    if (error) throw error;
-    const { data } = supabase.storage.from('driver-documents').getPublicUrl(path);
-    return data.publicUrl;
+    const path = `driver-documents/${userId}/${folder}_${Date.now()}.${ext}`;
+    const { uploadToBunny } = await import('@/lib/bunnyUpload');
+    return await uploadToBunny(file, path);
   };
 
   const handleRiderSubmit = async (e: React.FormEvent) => {

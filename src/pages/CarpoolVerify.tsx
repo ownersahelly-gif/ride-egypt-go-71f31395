@@ -34,10 +34,8 @@ const CarpoolVerify = () => {
   }, [user]);
 
   const uploadFile = async (file: File, path: string) => {
-    const { error } = await supabase.storage.from('carpool-documents').upload(path, file, { upsert: true });
-    if (error) throw error;
-    const { data } = supabase.storage.from('carpool-documents').getPublicUrl(path);
-    return data.publicUrl;
+    const { uploadToBunny } = await import('@/lib/bunnyUpload');
+    return await uploadToBunny(file, `carpool-documents/${path}`);
   };
 
   const handleSubmit = async () => {

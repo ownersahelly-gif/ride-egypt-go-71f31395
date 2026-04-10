@@ -468,11 +468,9 @@ const Dashboard = () => {
       if (paymentProof && !usingBundle) {
         setUploadingProof(true);
         const ext = paymentProof.name.split('.').pop();
-        const filePath = `${user.id}/${Date.now()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage.from('instapay-proofs').upload(filePath, paymentProof);
-        if (uploadErr) throw uploadErr;
-        const { data: urlData } = supabase.storage.from('instapay-proofs').getPublicUrl(filePath);
-        proofUrl = urlData?.publicUrl || filePath;
+        const filePath = `instapay-proofs/${user.id}/${Date.now()}.${ext}`;
+        const { uploadToBunny } = await import('@/lib/bunnyUpload');
+        proofUrl = await uploadToBunny(paymentProof, filePath);
         setUploadingProof(false);
       }
 
@@ -620,11 +618,9 @@ const Dashboard = () => {
       let proofUrl: string | null = null;
       if (paymentProof) {
         const ext = paymentProof.name.split('.').pop();
-        const filePath = `${user.id}/bundle_${Date.now()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage.from('instapay-proofs').upload(filePath, paymentProof);
-        if (uploadErr) throw uploadErr;
-        const { data: urlData } = supabase.storage.from('instapay-proofs').getPublicUrl(filePath);
-        proofUrl = urlData?.publicUrl || filePath;
+        const filePath = `instapay-proofs/${user.id}/bundle_${Date.now()}.${ext}`;
+        const { uploadToBunny } = await import('@/lib/bunnyUpload');
+        proofUrl = await uploadToBunny(paymentProof, filePath);
       }
       const expiresAt = new Date();
       if (bundle.bundle_type === 'weekly') expiresAt.setDate(expiresAt.getDate() + 7);
