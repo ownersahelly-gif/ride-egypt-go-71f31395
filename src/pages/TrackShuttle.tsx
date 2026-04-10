@@ -346,6 +346,15 @@ const TrackShuttle = () => {
 
   const isBoarded = booking?.status === 'boarded';
 
+  // Determine if trip departure is in the future
+  const tripDepartureMs = (() => {
+    if (!booking) return 0;
+    const [hh, mm, ss] = (booking.scheduled_time || '08:00:00').split(':').map(Number);
+    const dep = new Date(booking.scheduled_date + 'T00:00:00');
+    dep.setHours(hh, mm, ss || 0);
+    return dep.getTime();
+  })();
+  const tripNotStartedYet = tripDepartureMs > Date.now() && !shuttle?.current_lat;
   return (
     <div className="min-h-screen bg-surface flex flex-col">
       {/* Header */}
