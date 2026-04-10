@@ -8,10 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Globe, LogOut, User, MapPin, Clock, Users, Car, Calendar, DollarSign, Navigation, CheckCircle2, XCircle, Loader2, Play, Plus, Trash2, Repeat, TrendingUp, Star } from 'lucide-react';
+import { Globe, LogOut, User, MapPin, Clock, Users, Car, Calendar, DollarSign, Navigation, CheckCircle2, XCircle, Loader2, Play, Plus, Trash2, Repeat, TrendingUp, Star, Route, ArrowRight, AlertCircle, Info } from 'lucide-react';
 import { useDriverBookingNotifications } from '@/hooks/useBookingNotifications';
 
-type TabType = 'overview' | 'trips' | 'earnings' | 'schedule' | 'shuttle';
+type TabType = 'overview' | 'routes' | 'trips' | 'earnings' | 'schedule' | 'shuttle';
 
 const DriverDashboard = () => {
   const { user, signOut } = useAuth();
@@ -31,13 +31,25 @@ const DriverDashboard = () => {
   const [allRoutes, setAllRoutes] = useState<any[]>([]);
   const [driverSchedules, setDriverSchedules] = useState<any[]>([]);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [selectedRouteForSchedule, setSelectedRouteForSchedule] = useState<any>(null);
   const [scheduleForm, setScheduleForm] = useState({
     route_id: '',
     days: [] as number[],
     departure_time: '08:00',
+    return_time: '17:00',
     is_recurring: true,
+    min_passengers: 5,
   });
   const [savingSchedule, setSavingSchedule] = useState(false);
+
+  // Route request states
+  const [showRouteRequest, setShowRouteRequest] = useState(false);
+  const [routeRequestForm, setRouteRequestForm] = useState({
+    origin_name: '',
+    destination_name: '',
+    preferred_time: '08:00',
+  });
+  const [savingRouteRequest, setSavingRouteRequest] = useState(false);
 
   useDriverBookingNotifications(shuttle?.id || null);
 
@@ -51,7 +63,7 @@ const DriverDashboard = () => {
       const [{ data: profileData }, { data: shuttleData }, { data: routesData }] = await Promise.all([
         supabase.from('profiles').select('*').eq('user_id', user.id).single(),
         supabase.from('shuttles').select('*, routes(*)').eq('driver_id', user.id).limit(1).maybeSingle(),
-        supabase.from('routes').select('*').eq('status', 'active'),
+        supabase.from('routes').select('*, stops(*)').eq('status', 'active'),
       ]);
 
       setProfile(profileData);
@@ -63,7 +75,7 @@ const DriverDashboard = () => {
 
         const [{ data: bookingsData }, { data: schedulesData }] = await Promise.all([
           supabase.from('bookings').select('*, routes(*)').eq('shuttle_id', shuttleData.id).order('scheduled_date', { ascending: true }).limit(50),
-          supabase.from('driver_schedules').select('*, routes(name_en, name_ar)').eq('driver_id', user.id).order('day_of_week'),
+          supabase.from('driver_schedules').select('*, routes(name_en, name_ar, price, origin_name_en, origin_name_ar, destination_name_en, destination_name_ar, estimated_duration_minutes)').eq('driver_id', user.id).order('day_of_week'),
         ]);
         setBookings(bookingsData || []);
         setDriverSchedules(schedulesData || []);
@@ -105,11 +117,19 @@ const DriverDashboard = () => {
     }));
   };
 
+  const openScheduleForRoute = (routeObj: any) => {
+    setSelectedRouteForSchedule(routeObj);
+    setScheduleForm(prev => ({ ...prev, route_id: routeObj.id }));
+    setShowScheduleForm(true);
+    setTab('schedule');
+  };
+
   const saveSchedule = async () => {
     if (!user || !shuttle || !scheduleForm.route_id || scheduleForm.days.length === 0) return;
     setSavingSchedule(true);
 
-    const entries = scheduleForm.days.map(day => ({
+    // Create departure entries
+    const departureEntries = scheduleForm.days.map(day => ({
       driver_id: user.id,
       route_id: scheduleForm.route_id,
       shuttle_id: shuttle.id,
@@ -117,20 +137,21 @@ const DriverDashboard = () => {
       departure_time: scheduleForm.departure_time,
       is_recurring: scheduleForm.is_recurring,
       is_active: true,
+      min_passengers: scheduleForm.min_passengers,
+      return_time: scheduleForm.return_time || null,
     }));
 
-    const { error } = await supabase.from('driver_schedules').insert(entries);
+    const { error } = await supabase.from('driver_schedules').insert(departureEntries);
     if (error) {
       toast({ title: t('auth.error'), description: error.message, variant: 'destructive' });
     } else {
-      toast({ title: lang === 'ar' ? 'تم حفظ الجدول' : 'Schedule saved!' });
-      // Generate ride instances for the next 4 weeks
-      await generateRideInstances(entries);
-      // Refresh
-      const { data } = await supabase.from('driver_schedules').select('*, routes(name_en, name_ar)').eq('driver_id', user.id).order('day_of_week');
+      toast({ title: lang === 'ar' ? 'تم حفظ الجدول بنجاح!' : 'Schedule saved successfully!' });
+      await generateRideInstances(departureEntries);
+      const { data } = await supabase.from('driver_schedules').select('*, routes(name_en, name_ar, price, origin_name_en, origin_name_ar, destination_name_en, destination_name_ar, estimated_duration_minutes)').eq('driver_id', user.id).order('day_of_week');
       setDriverSchedules(data || []);
       setShowScheduleForm(false);
-      setScheduleForm({ route_id: '', days: [], departure_time: '08:00', is_recurring: true });
+      setSelectedRouteForSchedule(null);
+      setScheduleForm({ route_id: '', days: [], departure_time: '08:00', return_time: '17:00', is_recurring: true, min_passengers: 5 });
     }
     setSavingSchedule(false);
   };
@@ -177,6 +198,30 @@ const DriverDashboard = () => {
     }
   };
 
+  const submitRouteRequest = async () => {
+    if (!user || !routeRequestForm.origin_name || !routeRequestForm.destination_name) return;
+    setSavingRouteRequest(true);
+    const { error } = await supabase.from('route_requests').insert({
+      user_id: user.id,
+      origin_name: routeRequestForm.origin_name,
+      origin_lat: 0,
+      origin_lng: 0,
+      destination_name: routeRequestForm.destination_name,
+      destination_lat: 0,
+      destination_lng: 0,
+      preferred_time: routeRequestForm.preferred_time,
+      status: 'pending',
+    });
+    if (error) {
+      toast({ title: t('auth.error'), description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: lang === 'ar' ? 'تم إرسال طلبك!' : 'Route request submitted!', description: lang === 'ar' ? 'سيتم مراجعته وإضافته قريباً' : 'It will be reviewed and added soon' });
+      setShowRouteRequest(false);
+      setRouteRequestForm({ origin_name: '', destination_name: '', preferred_time: '08:00' });
+    }
+    setSavingRouteRequest(false);
+  };
+
   const statusColors: Record<string, string> = {
     active: 'bg-green-100 text-green-700',
     inactive: 'bg-muted text-muted-foreground',
@@ -189,6 +234,7 @@ const DriverDashboard = () => {
 
   const tabs: { key: TabType; icon: any; label: string }[] = [
     { key: 'overview', icon: Car, label: t('driverDash.overview') },
+    { key: 'routes', icon: Route, label: lang === 'ar' ? 'المسارات' : 'Routes' },
     { key: 'trips', icon: Navigation, label: t('driverDash.trips') },
     { key: 'earnings', icon: TrendingUp, label: lang === 'ar' ? 'الأرباح' : 'Earnings' },
     { key: 'schedule', icon: Calendar, label: t('driverDash.schedule') },
@@ -202,6 +248,25 @@ const DriverDashboard = () => {
   const todayBookings = bookings.filter(b => b.scheduled_date === new Date().toISOString().split('T')[0] && b.status !== 'cancelled');
   const pendingBookings = bookings.filter(b => b.status === 'pending');
   const totalEarnings = bookings.filter(b => b.status === 'completed').reduce((sum, b) => sum + parseFloat(b.total_price || 0), 0);
+
+  // Calculate expected earnings per route based on price * capacity * scheduled days per week
+  const getExpectedEarnings = (routeObj: any) => {
+    const price = parseFloat(routeObj.price || 0);
+    const capacity = shuttle?.capacity || 14;
+    // Driver gets ~70% of fare
+    const driverShare = price * 0.7;
+    return {
+      perTrip: driverShare * capacity,
+      perDay: driverShare * capacity * 2, // going + return
+      perWeek: driverShare * capacity * 2 * 5, // 5 working days
+      perMonth: driverShare * capacity * 2 * 22, // ~22 working days
+      pricePerSeat: price,
+      driverPerSeat: driverShare,
+    };
+  };
+
+  // Get routes the driver is already scheduled on
+  const scheduledRouteIds = new Set(driverSchedules.map(s => s.route_id));
 
   return (
     <div className="min-h-screen bg-surface">
@@ -259,6 +324,29 @@ const DriverDashboard = () => {
                   ))}
                 </div>
 
+                {/* Quick action: if no schedules, prompt to browse routes */}
+                {driverSchedules.length === 0 && (
+                  <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                        <Route className="w-6 h-6 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-foreground mb-1">
+                          {lang === 'ar' ? 'ابدأ بتحديد مسارك!' : 'Get started — choose your route!'}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          {lang === 'ar' ? 'تصفح المسارات المتاحة واختر الأنسب لك، ثم حدد أيام ومواعيد عملك' : 'Browse available routes, pick the best one for you, then set your working days and times'}
+                        </p>
+                        <Button onClick={() => setTab('routes')}>
+                          <Route className="w-4 h-4 me-1" />
+                          {lang === 'ar' ? 'تصفح المسارات' : 'Browse Routes'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-card border border-border rounded-xl p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div>
@@ -312,6 +400,181 @@ const DriverDashboard = () => {
               </div>
             )}
 
+            {/* Routes Tab - Browse & Choose Routes */}
+            {tab === 'routes' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">
+                      {lang === 'ar' ? 'المسارات المتاحة' : 'Available Routes'}
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {lang === 'ar' ? 'اختر مسارك وابدأ العمل عليه' : 'Choose a route and start working on it'}
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={() => setShowRouteRequest(!showRouteRequest)}>
+                    <Plus className="w-4 h-4 me-1" />
+                    {lang === 'ar' ? 'طلب مسار جديد' : 'Request New Route'}
+                  </Button>
+                </div>
+
+                {/* Route Request Form */}
+                {showRouteRequest && (
+                  <div className="bg-card border-2 border-primary/20 rounded-2xl p-6 space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Plus className="w-5 h-5 text-primary" />
+                      <h3 className="font-semibold text-foreground">
+                        {lang === 'ar' ? 'طلب مسار جديد' : 'Request a New Route'}
+                      </h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {lang === 'ar' ? 'لا تجد المسار اللي عاوزه؟ قولنا نقطة البداية والنهاية وهنراجعه ونضيفه' : "Can't find your route? Tell us the start and end points and we'll review and add it"}
+                    </p>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{lang === 'ar' ? 'نقطة البداية' : 'Starting Point'}</Label>
+                        <Input
+                          placeholder={lang === 'ar' ? 'مثال: مدينتي' : 'e.g. Madinaty'}
+                          value={routeRequestForm.origin_name}
+                          onChange={e => setRouteRequestForm(p => ({ ...p, origin_name: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{lang === 'ar' ? 'نقطة النهاية' : 'Destination'}</Label>
+                        <Input
+                          placeholder={lang === 'ar' ? 'مثال: القرية الذكية' : 'e.g. Smart Village'}
+                          value={routeRequestForm.destination_name}
+                          onChange={e => setRouteRequestForm(p => ({ ...p, destination_name: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{lang === 'ar' ? 'الوقت المفضل' : 'Preferred Time'}</Label>
+                      <Input type="time" value={routeRequestForm.preferred_time}
+                        onChange={e => setRouteRequestForm(p => ({ ...p, preferred_time: e.target.value }))}
+                        className="w-48" />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={submitRouteRequest} disabled={savingRouteRequest || !routeRequestForm.origin_name || !routeRequestForm.destination_name}>
+                        {savingRouteRequest ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : <CheckCircle2 className="w-4 h-4 me-1" />}
+                        {lang === 'ar' ? 'إرسال الطلب' : 'Submit Request'}
+                      </Button>
+                      <Button variant="outline" onClick={() => setShowRouteRequest(false)}>
+                        {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Route Cards */}
+                {allRoutes.length === 0 ? (
+                  <div className="bg-card border border-border rounded-xl p-12 text-center">
+                    <Route className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+                    <p className="text-muted-foreground">{lang === 'ar' ? 'لا توجد مسارات متاحة حالياً' : 'No routes available yet'}</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {allRoutes.map(r => {
+                      const earnings = getExpectedEarnings(r);
+                      const isScheduled = scheduledRouteIds.has(r.id);
+                      const stopsCount = r.stops?.length || 0;
+
+                      return (
+                        <div key={r.id} className={`bg-card border rounded-2xl p-6 transition-all ${isScheduled ? 'border-primary/40 bg-primary/[0.02]' : 'border-border hover:border-primary/20'}`}>
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-bold text-lg text-foreground">
+                                  {lang === 'ar' ? r.name_ar : r.name_en}
+                                </h3>
+                                {isScheduled && (
+                                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+                                    {lang === 'ar' ? 'مُجدول' : 'Scheduled'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <MapPin className="w-3.5 h-3.5 text-green-500" />
+                                <span>{lang === 'ar' ? r.origin_name_ar : r.origin_name_en}</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                                <MapPin className="w-3.5 h-3.5 text-destructive" />
+                                <span>{lang === 'ar' ? r.destination_name_ar : r.destination_name_en}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Route Details Grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                            <div className="bg-surface rounded-xl p-3 text-center">
+                              <DollarSign className="w-4 h-4 text-green-600 mx-auto mb-1" />
+                              <p className="text-lg font-bold text-foreground">{r.price} EGP</p>
+                              <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'سعر المقعد' : 'Per Seat'}</p>
+                            </div>
+                            <div className="bg-surface rounded-xl p-3 text-center">
+                              <Clock className="w-4 h-4 text-primary mx-auto mb-1" />
+                              <p className="text-lg font-bold text-foreground">{r.estimated_duration_minutes}</p>
+                              <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'دقيقة' : 'Minutes'}</p>
+                            </div>
+                            <div className="bg-surface rounded-xl p-3 text-center">
+                              <MapPin className="w-4 h-4 text-secondary mx-auto mb-1" />
+                              <p className="text-lg font-bold text-foreground">{stopsCount}</p>
+                              <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'محطات' : 'Stops'}</p>
+                            </div>
+                            <div className="bg-surface rounded-xl p-3 text-center">
+                              <Users className="w-4 h-4 text-primary mx-auto mb-1" />
+                              <p className="text-lg font-bold text-foreground">{shuttle.capacity}</p>
+                              <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'مقعد' : 'Seats'}</p>
+                            </div>
+                          </div>
+
+                          {/* Expected Earnings */}
+                          <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 rounded-xl p-4 mb-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <TrendingUp className="w-4 h-4 text-green-600" />
+                              <p className="text-sm font-semibold text-green-700 dark:text-green-400">
+                                {lang === 'ar' ? 'الأرباح المتوقعة (حصة السائق 70%)' : 'Expected Earnings (Driver gets 70%)'}
+                              </p>
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div>
+                                <p className="text-xl font-bold text-green-700 dark:text-green-400">{earnings.perTrip.toFixed(0)} EGP</p>
+                                <p className="text-xs text-green-600/70">{lang === 'ar' ? 'لكل رحلة (ممتلئة)' : 'Per trip (full)'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xl font-bold text-green-700 dark:text-green-400">{earnings.perWeek.toFixed(0)} EGP</p>
+                                <p className="text-xs text-green-600/70">{lang === 'ar' ? 'أسبوعياً' : 'Weekly'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xl font-bold text-green-700 dark:text-green-400">{earnings.perMonth.toFixed(0)} EGP</p>
+                                <p className="text-xs text-green-600/70">{lang === 'ar' ? 'شهرياً' : 'Monthly'}</p>
+                              </div>
+                            </div>
+                            <p className="text-xs text-green-600/60 mt-2 flex items-center gap-1">
+                              <Info className="w-3 h-3" />
+                              {lang === 'ar' ? `${earnings.driverPerSeat.toFixed(0)} جنيه للسائق من كل مقعد × ${shuttle.capacity} مقعد` : `${earnings.driverPerSeat.toFixed(0)} EGP driver share per seat × ${shuttle.capacity} seats`}
+                            </p>
+                          </div>
+
+                          {/* Action Button */}
+                          {!isScheduled ? (
+                            <Button className="w-full" size="lg" onClick={() => openScheduleForRoute(r)}>
+                              <Calendar className="w-4 h-4 me-2" />
+                              {lang === 'ar' ? 'اختر هذا المسار وحدد جدولك' : 'Choose This Route & Set Schedule'}
+                            </Button>
+                          ) : (
+                            <Button variant="outline" className="w-full" onClick={() => setTab('schedule')}>
+                              <Calendar className="w-4 h-4 me-2" />
+                              {lang === 'ar' ? 'عرض الجدول' : 'View Schedule'}
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Trips Tab */}
             {tab === 'trips' && (
               <div className="space-y-3">
@@ -356,39 +619,23 @@ const DriverDashboard = () => {
               const completed = bookings.filter(b => b.status === 'completed');
               const today = new Date();
               const todayStr = today.toISOString().split('T')[0];
-              
-              // This week (Mon-Sun)
               const dayOfWeek = today.getDay();
               const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
               const weekStart = new Date(today);
               weekStart.setDate(today.getDate() - mondayOffset);
               const weekStartStr = weekStart.toISOString().split('T')[0];
-              
-              // This month
               const monthStartStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
 
-              const dailyEarnings = completed
-                .filter(b => b.scheduled_date === todayStr)
-                .reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
-              const weeklyEarnings = completed
-                .filter(b => b.scheduled_date >= weekStartStr)
-                .reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
-              const monthlyEarnings = completed
-                .filter(b => b.scheduled_date >= monthStartStr)
-                .reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
-              const allTimeEarnings = completed
-                .reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
-
+              const dailyEarnings = completed.filter(b => b.scheduled_date === todayStr).reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
+              const weeklyEarnings = completed.filter(b => b.scheduled_date >= weekStartStr).reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
+              const monthlyEarnings = completed.filter(b => b.scheduled_date >= monthStartStr).reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
+              const allTimeEarnings = completed.reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
               const dailyRides = completed.filter(b => b.scheduled_date === todayStr).length;
               const weeklyRides = completed.filter(b => b.scheduled_date >= weekStartStr).length;
               const monthlyRides = completed.filter(b => b.scheduled_date >= monthStartStr).length;
 
-              // Ratings
-              const avgRating = 0; // Would need to fetch from ratings table
-
               return (
                 <div className="space-y-6">
-                  {/* Period Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {[
                       { label: lang === 'ar' ? 'اليوم' : 'Today', amount: dailyEarnings, rides: dailyRides, bg: 'bg-green-50 dark:bg-green-900/20' },
@@ -398,18 +645,13 @@ const DriverDashboard = () => {
                       <div key={i} className={`rounded-2xl border border-border p-5 ${period.bg}`}>
                         <p className="text-sm text-muted-foreground mb-1">{period.label}</p>
                         <p className="text-3xl font-bold text-foreground">{period.amount.toFixed(0)} <span className="text-sm font-normal text-muted-foreground">EGP</span></p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {period.rides} {lang === 'ar' ? 'رحلة' : 'rides'}
-                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">{period.rides} {lang === 'ar' ? 'رحلة' : 'rides'}</p>
                       </div>
                     ))}
                   </div>
 
-                  {/* All-time summary */}
                   <div className="bg-card border border-border rounded-2xl p-6">
-                    <h3 className="font-semibold text-foreground mb-4">
-                      {lang === 'ar' ? 'الإجمالي' : 'All Time'}
-                    </h3>
+                    <h3 className="font-semibold text-foreground mb-4">{lang === 'ar' ? 'الإجمالي' : 'All Time'}</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="bg-surface rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-1">
@@ -430,39 +672,28 @@ const DriverDashboard = () => {
                           <Users className="w-4 h-4 text-primary" />
                           <p className="text-sm text-muted-foreground">{lang === 'ar' ? 'إجمالي الركاب' : 'Total Passengers'}</p>
                         </div>
-                        <p className="text-2xl font-bold text-foreground">
-                          {completed.reduce((s, b) => s + (b.seats || 1), 0)}
-                        </p>
+                        <p className="text-2xl font-bold text-foreground">{completed.reduce((s, b) => s + (b.seats || 1), 0)}</p>
                       </div>
                       <div className="bg-surface rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-1">
                           <DollarSign className="w-4 h-4 text-secondary" />
                           <p className="text-sm text-muted-foreground">{lang === 'ar' ? 'متوسط الرحلة' : 'Avg per Ride'}</p>
                         </div>
-                        <p className="text-2xl font-bold text-foreground">
-                          {completed.length > 0 ? (allTimeEarnings / completed.length).toFixed(0) : 0} EGP
-                        </p>
+                        <p className="text-2xl font-bold text-foreground">{completed.length > 0 ? (allTimeEarnings / completed.length).toFixed(0) : 0} EGP</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Recent completed rides */}
                   <div className="bg-card border border-border rounded-2xl p-6">
-                    <h3 className="font-semibold text-foreground mb-4">
-                      {lang === 'ar' ? 'آخر الرحلات المكتملة' : 'Recent Completed Rides'}
-                    </h3>
+                    <h3 className="font-semibold text-foreground mb-4">{lang === 'ar' ? 'آخر الرحلات المكتملة' : 'Recent Completed Rides'}</h3>
                     {completed.length === 0 ? (
-                      <p className="text-center text-muted-foreground py-4">
-                        {lang === 'ar' ? 'لا يوجد رحلات مكتملة بعد' : 'No completed rides yet'}
-                      </p>
+                      <p className="text-center text-muted-foreground py-4">{lang === 'ar' ? 'لا يوجد رحلات مكتملة بعد' : 'No completed rides yet'}</p>
                     ) : (
                       <div className="space-y-2">
                         {completed.slice(0, 10).map(b => (
                           <div key={b.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                             <div>
-                              <p className="text-sm font-medium text-foreground">
-                                {lang === 'ar' ? b.routes?.name_ar : b.routes?.name_en}
-                              </p>
+                              <p className="text-sm font-medium text-foreground">{lang === 'ar' ? b.routes?.name_ar : b.routes?.name_en}</p>
                               <p className="text-xs text-muted-foreground">{b.scheduled_date} · {b.scheduled_time}</p>
                             </div>
                             <div className="text-end">
@@ -485,32 +716,46 @@ const DriverDashboard = () => {
                   <h2 className="text-xl font-bold text-foreground">
                     {lang === 'ar' ? 'جدول الرحلات' : 'My Route Schedule'}
                   </h2>
-                  <Button onClick={() => setShowScheduleForm(!showScheduleForm)}>
+                  <Button onClick={() => { setShowScheduleForm(!showScheduleForm); setSelectedRouteForSchedule(null); }}>
                     <Plus className="w-4 h-4 me-1" />{lang === 'ar' ? 'إضافة جدول' : 'Add Schedule'}
                   </Button>
                 </div>
 
                 {showScheduleForm && (
-                  <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+                  <div className="bg-card border-2 border-primary/20 rounded-2xl p-6 space-y-5">
                     <h3 className="font-semibold text-foreground">{lang === 'ar' ? 'جدول جديد' : 'New Schedule'}</h3>
 
-                    {/* Route selection */}
-                    <div className="space-y-2">
-                      <Label>{lang === 'ar' ? 'اختر المسار' : 'Select Route'}</Label>
-                      <select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                        value={scheduleForm.route_id} onChange={e => setScheduleForm(p => ({ ...p, route_id: e.target.value }))}>
-                        <option value="">{lang === 'ar' ? 'اختر مسار...' : 'Choose a route...'}</option>
-                        {allRoutes.map(r => (
-                          <option key={r.id} value={r.id}>
-                            {lang === 'ar' ? r.name_ar : r.name_en} - {r.price} EGP
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {/* Selected route info */}
+                    {selectedRouteForSchedule && (
+                      <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+                        <p className="font-medium text-foreground">
+                          {lang === 'ar' ? selectedRouteForSchedule.name_ar : selectedRouteForSchedule.name_en}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {lang === 'ar' ? selectedRouteForSchedule.origin_name_ar : selectedRouteForSchedule.origin_name_en} → {lang === 'ar' ? selectedRouteForSchedule.destination_name_ar : selectedRouteForSchedule.destination_name_en}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Route selection (if not pre-selected) */}
+                    {!selectedRouteForSchedule && (
+                      <div className="space-y-2">
+                        <Label>{lang === 'ar' ? 'اختر المسار' : 'Select Route'}</Label>
+                        <select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                          value={scheduleForm.route_id} onChange={e => setScheduleForm(p => ({ ...p, route_id: e.target.value }))}>
+                          <option value="">{lang === 'ar' ? 'اختر مسار...' : 'Choose a route...'}</option>
+                          {allRoutes.map(r => (
+                            <option key={r.id} value={r.id}>
+                              {lang === 'ar' ? r.name_ar : r.name_en} - {r.price} EGP
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
                     {/* Day selection */}
                     <div className="space-y-2">
-                      <Label>{lang === 'ar' ? 'اختر الأيام' : 'Select Days'}</Label>
+                      <Label>{lang === 'ar' ? 'اختر أيام العمل' : 'Select Working Days'}</Label>
                       <div className="flex flex-wrap gap-2">
                         {dayNames.map((name, i) => (
                           <button key={i} onClick={() => toggleDay(i)}
@@ -523,14 +768,58 @@ const DriverDashboard = () => {
                           </button>
                         ))}
                       </div>
+                      {/* Quick select */}
+                      <div className="flex gap-2 mt-1">
+                        <button onClick={() => setScheduleForm(p => ({ ...p, days: [0, 1, 2, 3, 4] }))}
+                          className="text-xs text-primary hover:underline">
+                          {lang === 'ar' ? 'الأحد - الخميس' : 'Sun - Thu'}
+                        </button>
+                        <button onClick={() => setScheduleForm(p => ({ ...p, days: [1, 2, 3, 4, 5] }))}
+                          className="text-xs text-primary hover:underline">
+                          {lang === 'ar' ? 'الإثنين - الجمعة' : 'Mon - Fri'}
+                        </button>
+                        <button onClick={() => setScheduleForm(p => ({ ...p, days: [0, 1, 2, 3, 4, 5, 6] }))}
+                          className="text-xs text-primary hover:underline">
+                          {lang === 'ar' ? 'كل الأيام' : 'All Days'}
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Time */}
+                    {/* Times */}
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>{lang === 'ar' ? 'وقت الذهاب (الصباح)' : 'Departure Time (Morning)'}</Label>
+                        <Input type="time" value={scheduleForm.departure_time}
+                          onChange={e => setScheduleForm(p => ({ ...p, departure_time: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{lang === 'ar' ? 'وقت العودة (المساء)' : 'Return Time (Evening)'}</Label>
+                        <Input type="time" value={scheduleForm.return_time}
+                          onChange={e => setScheduleForm(p => ({ ...p, return_time: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Minimum passengers */}
                     <div className="space-y-2">
-                      <Label>{lang === 'ar' ? 'وقت الانطلاق' : 'Departure Time'}</Label>
-                      <Input type="time" value={scheduleForm.departure_time}
-                        onChange={e => setScheduleForm(p => ({ ...p, departure_time: e.target.value }))}
-                        className="w-48" />
+                      <Label>{lang === 'ar' ? 'أقل عدد ركاب لانطلاق الرحلة' : 'Minimum Passengers for Trip to Go'}</Label>
+                      <div className="flex items-center gap-3">
+                        <Input type="number" min={1} max={shuttle.capacity}
+                          value={scheduleForm.min_passengers}
+                          onChange={e => setScheduleForm(p => ({ ...p, min_passengers: parseInt(e.target.value) || 1 }))}
+                          className="w-24"
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {lang === 'ar' ? `من أصل ${shuttle.capacity} مقعد` : `out of ${shuttle.capacity} seats`}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2 mt-1">
+                        <AlertCircle className="w-3.5 h-3.5 text-secondary mt-0.5 shrink-0" />
+                        <p className="text-xs text-muted-foreground">
+                          {lang === 'ar' ? 'لو عدد الحجوزات أقل من الحد الأدنى، الرحلة مش هتنطلق والركاب هيتبلغوا' : "If bookings are below minimum, the trip won't depart and riders will be notified"}
+                        </p>
+                      </div>
                     </div>
 
                     {/* Recurring toggle */}
@@ -552,12 +841,35 @@ const DriverDashboard = () => {
                       </div>
                     </div>
 
+                    {/* Expected earnings preview */}
+                    {scheduleForm.route_id && scheduleForm.days.length > 0 && (() => {
+                      const selectedRoute = allRoutes.find(r => r.id === scheduleForm.route_id);
+                      if (!selectedRoute) return null;
+                      const earnings = getExpectedEarnings(selectedRoute);
+                      const tripsPerWeek = scheduleForm.days.length * (scheduleForm.return_time ? 2 : 1);
+                      const weeklyEstimate = earnings.driverPerSeat * shuttle.capacity * tripsPerWeek;
+
+                      return (
+                        <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 rounded-xl p-4">
+                          <p className="text-sm font-semibold text-green-700 dark:text-green-400 mb-1">
+                            {lang === 'ar' ? 'الأرباح المتوقعة بهذا الجدول' : 'Expected Earnings with This Schedule'}
+                          </p>
+                          <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                            ~{weeklyEstimate.toFixed(0)} EGP / {lang === 'ar' ? 'أسبوع' : 'week'}
+                          </p>
+                          <p className="text-xs text-green-600/70 mt-1">
+                            {tripsPerWeek} {lang === 'ar' ? 'رحلة/أسبوع × ' : 'trips/week × '}{shuttle.capacity} {lang === 'ar' ? 'مقعد' : 'seats'} × {earnings.driverPerSeat.toFixed(0)} EGP
+                          </p>
+                        </div>
+                      );
+                    })()}
+
                     <div className="flex gap-2 pt-2">
                       <Button onClick={saveSchedule} disabled={savingSchedule || !scheduleForm.route_id || scheduleForm.days.length === 0}>
                         {savingSchedule ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : <CheckCircle2 className="w-4 h-4 me-1" />}
                         {lang === 'ar' ? 'حفظ الجدول' : 'Save Schedule'}
                       </Button>
-                      <Button variant="outline" onClick={() => setShowScheduleForm(false)}>
+                      <Button variant="outline" onClick={() => { setShowScheduleForm(false); setSelectedRouteForSchedule(null); }}>
                         {lang === 'ar' ? 'إلغاء' : 'Cancel'}
                       </Button>
                     </div>
@@ -569,11 +881,14 @@ const DriverDashboard = () => {
                   <div className="bg-card border border-border rounded-xl p-12 text-center">
                     <Calendar className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
                     <p className="text-muted-foreground mb-2">{lang === 'ar' ? 'لم تحدد أي جدول بعد' : 'No schedules set yet'}</p>
-                    <p className="text-sm text-muted-foreground">{lang === 'ar' ? 'أضف جدولك ليظهر للركاب' : 'Add your schedule so riders can see and book your rides'}</p>
+                    <p className="text-sm text-muted-foreground mb-4">{lang === 'ar' ? 'تصفح المسارات واختر الأنسب لك' : 'Browse routes and pick the best one for you'}</p>
+                    <Button variant="outline" onClick={() => setTab('routes')}>
+                      <Route className="w-4 h-4 me-1" />
+                      {lang === 'ar' ? 'تصفح المسارات' : 'Browse Routes'}
+                    </Button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {/* Group schedules by route */}
+                  <div className="space-y-4">
                     {Object.entries(
                       driverSchedules.reduce((acc: Record<string, any[]>, s) => {
                         const key = s.route_id;
@@ -581,25 +896,53 @@ const DriverDashboard = () => {
                         acc[key].push(s);
                         return acc;
                       }, {})
-                    ).map(([routeId, schedules]) => (
-                      <div key={routeId} className="bg-card border border-border rounded-xl p-5">
-                        <h4 className="font-semibold text-foreground mb-3">
-                          {lang === 'ar' ? schedules[0]?.routes?.name_ar : schedules[0]?.routes?.name_en}
-                        </h4>
-                        <div className="flex flex-wrap gap-2">
-                          {(schedules as any[]).sort((a: any, b: any) => a.day_of_week - b.day_of_week).map((s: any) => (
-                            <div key={s.id} className="flex items-center gap-2 bg-surface rounded-lg px-3 py-2">
-                              <span className="text-sm font-medium text-foreground">{dayNames[s.day_of_week]}</span>
-                              <span className="text-xs text-muted-foreground">{s.departure_time?.slice(0, 5)}</span>
-                              {s.is_recurring && <Repeat className="w-3 h-3 text-primary" />}
-                              <button onClick={() => deleteSchedule(s.id)} className="text-destructive/60 hover:text-destructive">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                    ).map(([routeId, schedules]) => {
+                      const routeInfo = (schedules as any[])[0]?.routes;
+                      return (
+                        <div key={routeId} className="bg-card border border-border rounded-2xl p-5">
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <h4 className="font-semibold text-foreground">
+                                {lang === 'ar' ? routeInfo?.name_ar : routeInfo?.name_en}
+                              </h4>
+                              <p className="text-sm text-muted-foreground">
+                                {lang === 'ar' ? routeInfo?.origin_name_ar : routeInfo?.origin_name_en} → {lang === 'ar' ? routeInfo?.destination_name_ar : routeInfo?.destination_name_en}
+                              </p>
                             </div>
-                          ))}
+                            <span className="text-sm font-medium text-foreground">{routeInfo?.price} EGP/{lang === 'ar' ? 'مقعد' : 'seat'}</span>
+                          </div>
+
+                          {/* Schedule details */}
+                          <div className="space-y-2">
+                            {(schedules as any[]).sort((a: any, b: any) => a.day_of_week - b.day_of_week).map((s: any) => (
+                              <div key={s.id} className="flex items-center justify-between bg-surface rounded-xl px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-medium text-foreground w-24">{dayNames[s.day_of_week]}</span>
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    <span>{s.departure_time?.slice(0, 5)}</span>
+                                    {s.return_time && (
+                                      <>
+                                        <ArrowRight className="w-3 h-3" />
+                                        <span>{s.return_time?.slice(0, 5)}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Users className="w-3 h-3" />
+                                    <span>{lang === 'ar' ? `حد أدنى ${s.min_passengers}` : `Min ${s.min_passengers}`}</span>
+                                  </div>
+                                  {s.is_recurring && <Repeat className="w-3 h-3 text-primary" />}
+                                </div>
+                                <button onClick={() => deleteSchedule(s.id)} className="text-destructive/60 hover:text-destructive p-1">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
