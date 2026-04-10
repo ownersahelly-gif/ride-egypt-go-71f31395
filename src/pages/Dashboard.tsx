@@ -30,54 +30,6 @@ const haversineDistanceKm = (a: { lat: number; lng: number }, b: { lat: number; 
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 };
 
-/** Check if a point is close to the route polyline */
-const isPointOnRoute = (point: { lat: number; lng: number }, routeResult: any): boolean => {
-  if (!routeResult || typeof google === 'undefined' || !google?.maps) return false;
-  const path = routeResult.routes[0]?.overview_path;
-  if (!path) return false;
-  const pt = new google.maps.LatLng(point.lat, point.lng);
-  const isOnPoly = google.maps.geometry?.poly?.isLocationOnEdge(pt, new google.maps.Polyline({ path }), 5e-4);
-  if (isOnPoly) return true;
-  for (const p of path) {
-    const dist = google.maps.geometry?.spherical?.computeDistanceBetween(pt, p);
-    if (dist !== undefined && dist < 80) return true;
-  }
-  return false;
-};
-
-/** Calculate driving-time deviation */
-const calcDeviation = (
-  prevStop: { lat: number; lng: number },
-  nextStop: { lat: number; lng: number },
-  customPoint: { lat: number; lng: number },
-): Promise<number> => {
-  if (typeof google === 'undefined' || !google?.maps?.DirectionsService) return Promise.resolve(999);
-  const ds = new google.maps.DirectionsService();
-  const directReq = (): Promise<number> =>
-    new Promise((res) =>
-      ds.route(
-        { origin: prevStop, destination: nextStop, travelMode: google.maps.TravelMode.DRIVING },
-        (r, s) => res(s === 'OK' && r ? (r.routes[0]?.legs[0]?.duration?.value ?? 0) : 0),
-      ),
-    );
-  const detourReq = (): Promise<number> =>
-    new Promise((res) =>
-      ds.route(
-        {
-          origin: prevStop,
-          destination: nextStop,
-          waypoints: [{ location: customPoint, stopover: true }],
-          travelMode: google.maps.TravelMode.DRIVING,
-        },
-        (r, s) => {
-          if (s !== 'OK' || !r) return res(99999);
-          const legs = r.routes[0]?.legs ?? [];
-          res(legs.reduce((sum, l) => sum + (l.duration?.value ?? 0), 0));
-        },
-      ),
-    );
-  return Promise.all([directReq(), detourReq()]).then(([direct, detour]) => (detour - direct) / 60);
-};
 
 type PointSelection = { lat: number; lng: number; name: string } | null;
 
@@ -271,6 +223,21 @@ const Dashboard = () => {
   };
 
   // Validate custom point
+  /** Find minimum distance (km) from a point to the route polyline */
+  const minDistanceToRouteKm = useCallback((point: { lat: number; lng: number }): number => {
+    if (!routeDirections) return 999;
+    const path = routeDirections.routes?.[0]?.overview_path;
+    if (!path || path.length === 0) return 999;
+    let minDist = Infinity;
+    for (const p of path) {
+      const dist = haversineDistanceKm(point, { lat: p.lat(), lng: p.lng() });
+      if (dist < minDist) minDist = dist;
+    }
+    return minDist;
+  }, [routeDirections]);
+
+  const MAX_DISTANCE_KM = 2;
+
   const validateCustomPoint = useCallback(async (
     point: { lat: number; lng: number; name: string },
     type: 'pickup' | 'dropoff',
@@ -282,28 +249,23 @@ const Dashboard = () => {
     setValidating(true);
     setResult(null);
     setCustom(point);
-    const onRoute = isPointOnRoute(point, routeDirections);
-    if (onRoute) { setResult({ ok: true, minutes: 0, onRoute: true }); setValidating(false); return; }
-    const origin = { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng };
-    const dest = { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng };
-    try {
-      const deviation = await calcDeviation(origin, dest, point);
-      const ok = deviation <= 5;
-      setResult({ ok, minutes: Math.round(deviation * 10) / 10, onRoute: false });
-      if (!ok) {
-        toast({
-          title: lang === 'ar' ? 'موقع بعيد عن المسار' : 'Too far from route',
-          description: lang === 'ar'
-            ? `هذا الموقع سيضيف ${Math.round(deviation)} دقائق إنحراف (الحد الأقصى 5 دقائق)`
-            : `This location adds ${Math.round(deviation)} min deviation (max 5 min allowed)`,
-          variant: 'destructive',
-        });
-      }
-    } catch {
-      setResult({ ok: false, minutes: 99, onRoute: false });
+
+    const distKm = minDistanceToRouteKm(point);
+    const ok = distKm <= MAX_DISTANCE_KM;
+    const onRoute = distKm <= 0.1; // within 100m counts as on-route
+    setResult({ ok, minutes: Math.round(distKm * 10) / 10, onRoute });
+
+    if (!ok) {
+      toast({
+        title: lang === 'ar' ? 'موقع بعيد عن المسار' : 'Too far from route',
+        description: lang === 'ar'
+          ? `هذا الموقع يبعد ${distKm.toFixed(1)} كم عن المسار (الحد الأقصى ${MAX_DISTANCE_KM} كم)`
+          : `This location is ${distKm.toFixed(1)} km from the route (max ${MAX_DISTANCE_KM} km)`,
+        variant: 'destructive',
+      });
     }
     setValidating(false);
-  }, [selectedRide, routeDirections, lang, toast]);
+  }, [selectedRide, minDistanceToRouteKm, lang, toast]);
 
   const handleMapClick = useCallback((lat: number, lng: number) => {
     if (step !== 'details') return;
@@ -556,7 +518,7 @@ const Dashboard = () => {
   ) => {
     const isPickupType = type === 'pickup';
     const startLabel = isPickupType ? (lang === 'ar' ? '🚏 نقطة الانطلاق' : '🚏 Starting Point') : (lang === 'ar' ? '🏁 نقطة الوصول' : '🏁 End Point');
-    const nearbyLabel = lang === 'ar' ? '📍 اختر من الخريطة' : '📍 Pick on map';
+    const nearbyLabel = lang === 'ar' ? '📍 اختر من الخريطة (≤2 كم)' : '📍 Pick on map (≤2 km)';
     const isStartMode = mode === 'start' || mode === 'end';
 
     return (
