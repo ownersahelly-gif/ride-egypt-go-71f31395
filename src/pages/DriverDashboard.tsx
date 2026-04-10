@@ -663,18 +663,48 @@ const DriverDashboard = () => {
                 {bookings.length === 0 ? (
                   <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">{t('driverDash.noBookingsYet')}</div>
                 ) : bookings.map(b => (
-                  <div key={b.id} className="bg-card border border-border rounded-xl p-5">
-                    <div className="flex items-center justify-between mb-3">
+                  <div key={b.id} className="bg-card border border-border rounded-xl p-5 space-y-3">
+                    {/* Header: route name, date, status */}
+                    <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium text-foreground">{lang === 'ar' ? b.routes?.name_ar : b.routes?.name_en}</p>
                         <p className="text-sm text-muted-foreground">{b.scheduled_date} · {b.scheduled_time}</p>
                       </div>
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[b.status]}`}>{t(`booking.status.${b.status}`)}</span>
                     </div>
+
+                    {/* Pickup & Dropoff Points */}
+                    {(b.custom_pickup_name || b.custom_dropoff_name) && (
+                      <div className="bg-surface rounded-xl p-3 space-y-2">
+                        {b.custom_pickup_name && (
+                          <div className="flex items-start gap-2">
+                            <MapPin className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">{lang === 'ar' ? 'نقطة الصعود' : 'Pickup Point'}</p>
+                              <p className="text-sm text-foreground">{b.custom_pickup_name}</p>
+                            </div>
+                          </div>
+                        )}
+                        {b.custom_dropoff_name && (
+                          <div className="flex items-start gap-2">
+                            <MapPin className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">{lang === 'ar' ? 'نقطة النزول' : 'Dropoff Point'}</p>
+                              <p className="text-sm text-foreground">{b.custom_dropoff_name}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Booking info row */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>{b.seats} {t('booking.seat')}</span>
-                        <span className="font-medium text-foreground">{b.total_price} EGP</span>
+                        <span><Users className="w-3.5 h-3.5 inline me-1" />{b.seats} {t('booking.seat')}</span>
+                        <span className="font-semibold text-foreground">{b.total_price} EGP</span>
+                        {b.boarding_code && (
+                          <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">#{b.boarding_code}</span>
+                        )}
                       </div>
                       {b.status === 'pending' && (
                         <div className="flex gap-2">
@@ -690,6 +720,19 @@ const DriverDashboard = () => {
                         <Button size="sm" variant="outline" onClick={() => updateBookingStatus(b.id, 'completed')}>{t('driverDash.complete')}</Button>
                       )}
                     </div>
+
+                    {/* Payment Proof */}
+                    {b.payment_proof_url && (
+                      <div className="border-t border-border pt-3">
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">
+                          <DollarSign className="w-3.5 h-3.5 inline me-1" />
+                          {lang === 'ar' ? 'إثبات الدفع InstaPay' : 'InstaPay Payment Proof'}
+                        </p>
+                        <a href={b.payment_proof_url} target="_blank" rel="noopener noreferrer">
+                          <img src={b.payment_proof_url} alt="Payment proof" className="w-full max-w-xs h-40 object-contain rounded-lg border border-border bg-muted cursor-pointer hover:opacity-80 transition-opacity" />
+                        </a>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
