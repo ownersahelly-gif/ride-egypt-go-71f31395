@@ -10,7 +10,8 @@ import BottomNav from '@/components/BottomNav';
 import MapView from '@/components/MapView';
 import {
   Plus, MapPin, Clock, Users, Fuel, RefreshCw, Car,
-  ChevronRight, ChevronLeft, Search, Filter, Shield, AlertCircle
+  ChevronRight, ChevronLeft, Search, Filter, Shield, AlertCircle,
+  Map, List
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -28,11 +29,65 @@ const Carpool = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'browse' | 'my-rides' | 'my-routes'>('browse');
+  const [browseMode, setBrowseMode] = useState<'list' | 'map'>('list');
 
   useEffect(() => {
     if (!user) return;
     fetchData();
   }, [user]);
+
+  // Real-time notifications for carpool requests & acceptances
+  useEffect(() => {
+    if (!user) return;
+
+    // Listen for new requests on MY routes
+    const reqChannel = supabase
+      .channel('carpool-req-notifications')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'carpool_requests',
+      }, async (payload) => {
+        const req = payload.new as any;
+        // Check if this request is for one of my routes
+        const myRoute = routes.find(r => r.id === req.route_id && r.user_id === user.id);
+        if (myRoute) {
+          toast({
+            title: lang === 'ar' ? '🚗 طلب انضمام جديد!' : '🚗 New join request!',
+            description: lang === 'ar'
+              ? `شخص يريد الانضمام لرحلتك ${myRoute.origin_name} → ${myRoute.destination_name}`
+              : `Someone wants to join your ride ${myRoute.origin_name} → ${myRoute.destination_name}`,
+          });
+          fetchData();
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'carpool_requests',
+      }, async (payload) => {
+        const req = payload.new as any;
+        // If MY request was accepted
+        if (req.user_id === user.id && req.status === 'accepted') {
+          toast({
+            title: lang === 'ar' ? '✅ تم قبول طلبك!' : '✅ Request accepted!',
+            description: lang === 'ar' ? 'تم قبول طلب الانضمام للرحلة' : 'Your carpool request was accepted',
+          });
+          fetchData();
+        }
+        if (req.user_id === user.id && req.status === 'rejected') {
+          toast({
+            title: lang === 'ar' ? '❌ تم رفض طلبك' : '❌ Request rejected',
+            description: lang === 'ar' ? 'تم رفض طلب الانضمام' : 'Your carpool request was rejected',
+            variant: 'destructive',
+          });
+          fetchData();
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(reqChannel); };
+  }, [user, routes, lang]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -57,10 +112,17 @@ const Carpool = () => {
   });
 
   const myRoutes = routes.filter(r => r.user_id === user?.id);
+  const otherRoutes = filteredRoutes.filter(r => r.user_id !== user?.id);
 
   const dayNames = lang === 'ar'
     ? ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت']
     : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Map markers for browse view
+  const mapMarkers = otherRoutes.flatMap(r => [
+    { lat: r.origin_lat, lng: r.origin_lng, label: r.origin_name?.slice(0, 15), color: 'green' as const },
+    { lat: r.destination_lat, lng: r.destination_lng, label: r.destination_name?.slice(0, 15), color: 'red' as const },
+  ]);
 
   if (!user) return null;
 
@@ -129,22 +191,44 @@ const Carpool = () => {
       <div className="p-4 space-y-4">
         {tab === 'browse' && (
           <>
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                className="pl-10"
-                placeholder={lang === 'ar' ? 'ابحث عن موقع...' : 'Search locations...'}
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
+            {/* Search + View Toggle */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  className="pl-10"
+                  placeholder={lang === 'ar' ? 'ابحث عن موقع...' : 'Search locations...'}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setBrowseMode(browseMode === 'list' ? 'map' : 'list')}
+                title={browseMode === 'list' ? 'Map view' : 'List view'}
+              >
+                {browseMode === 'list' ? <Map className="w-4 h-4" /> : <List className="w-4 h-4" />}
+              </Button>
             </div>
 
+            {/* Map View */}
+            {browseMode === 'map' && (
+              <div className="h-80 rounded-xl overflow-hidden border border-border">
+                <MapView
+                  markers={mapMarkers}
+                  zoom={10}
+                  showUserLocation
+                />
+              </div>
+            )}
+
+            {/* Route cards or empty state */}
             {loading ? (
               <div className="text-center py-12 text-muted-foreground">
                 {lang === 'ar' ? 'جاري التحميل...' : 'Loading...'}
               </div>
-            ) : filteredRoutes.length === 0 ? (
+            ) : otherRoutes.length === 0 ? (
               <div className="text-center py-12">
                 <Car className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
                 <p className="text-muted-foreground">
@@ -157,7 +241,7 @@ const Carpool = () => {
                 )}
               </div>
             ) : (
-              filteredRoutes.filter(r => r.user_id !== user.id).map(route => (
+              otherRoutes.map(route => (
                 <Card key={route.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/carpool/route/${route.id}`)}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
