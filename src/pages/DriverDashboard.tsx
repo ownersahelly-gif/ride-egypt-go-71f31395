@@ -547,27 +547,51 @@ const DriverDashboard = () => {
                                 </div>
                               </div>
                             )}
-                            {/* Per-day passenger breakdown with go/return counts */}
+                             {/* Per-day passenger breakdown with go/return counts */}
                             <div className="space-y-1.5">
                               {(schedules as any[]).sort((a: any, b: any) => a.day_of_week - b.day_of_week).map((s: any) => {
                                 const dayBookings = bookingsByDay[s.day_of_week] || [];
                                 const goCount = dayBookings.filter((b: any) => b.trip_direction === 'go' || b.trip_direction === 'both').length;
                                 const returnCount = dayBookings.filter((b: any) => b.trip_direction === 'return' || b.trip_direction === 'both').length;
+                                const isQuickAdding = quickAddDay?.routeId === routeId && quickAddDay?.day === s.day_of_week;
                                 return (
-                                  <div key={s.id} className="flex items-center justify-between bg-surface rounded-lg px-3 py-2">
-                                    <div className="flex items-center gap-2 text-sm">
-                                      <span className="font-medium text-foreground w-16">{dayNames[s.day_of_week]}</span>
-                                      {s.departure_time && <><Clock className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-muted-foreground">{s.departure_time?.slice(0, 5)}</span></>}
-                                      {s.return_time && <><ArrowRight className="w-3 h-3 text-muted-foreground" /><span className="text-muted-foreground">{s.return_time?.slice(0, 5)}</span></>}
+                                  <div key={s.id}>
+                                    <div className="flex items-center justify-between bg-surface rounded-lg px-3 py-2">
+                                      <div className="flex items-center gap-2 text-sm">
+                                        <span className="font-medium text-foreground w-16">{dayNames[s.day_of_week]}</span>
+                                        {s.departure_time && <><Clock className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-muted-foreground">{s.departure_time?.slice(0, 5)}</span></>}
+                                        {s.return_time && <><ArrowRight className="w-3 h-3 text-muted-foreground" /><span className="text-muted-foreground">{s.return_time?.slice(0, 5)}</span></>}
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                                          {lang === 'ar' ? `ذهاب ${goCount}` : `Go ${goCount}`}
+                                        </span>
+                                        <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
+                                          {lang === 'ar' ? `عودة ${returnCount}` : `Back ${returnCount}`}
+                                        </span>
+                                        <button
+                                          onClick={() => isQuickAdding ? setQuickAddDay(null) : setQuickAddDay({ routeId, day: s.day_of_week, shuttleId: shuttle.id })}
+                                          className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors"
+                                          title={lang === 'ar' ? 'إضافة وقت' : 'Add time'}
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                        </button>
+                                      </div>
                                     </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
-                                        {lang === 'ar' ? `ذهاب ${goCount}` : `Go ${goCount}`}
-                                      </span>
-                                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
-                                        {lang === 'ar' ? `عودة ${returnCount}` : `Back ${returnCount}`}
-                                      </span>
-                                    </div>
+                                    {/* Quick add inline form */}
+                                    {isQuickAdding && (
+                                      <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 rounded-lg mt-1">
+                                        <select value={quickAddDir} onChange={e => setQuickAddDir(e.target.value as 'go' | 'return')}
+                                          className="h-8 rounded-md border border-input bg-background px-2 text-xs">
+                                          <option value="go">{lang === 'ar' ? 'ذهاب' : 'Go'}</option>
+                                          <option value="return">{lang === 'ar' ? 'عودة' : 'Back'}</option>
+                                        </select>
+                                        <Input type="time" value={quickAddTime} onChange={e => setQuickAddTime(e.target.value)} className="h-8 w-24 text-xs" />
+                                        <Button size="sm" className="h-8 text-xs px-3" onClick={quickAddTimeSlot} disabled={savingQuickAdd}>
+                                          {savingQuickAdd ? <Loader2 className="w-3 h-3 animate-spin" /> : (lang === 'ar' ? 'إضافة' : 'Add')}
+                                        </Button>
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}
