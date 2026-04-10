@@ -1147,8 +1147,20 @@ const DriverDashboard = () => {
                           </div>
                         </button>
 
-                        {isExpanded && (
+                        {isExpanded && (() => {
+                          const today = new Date().toISOString().split('T')[0];
+                          const isTripToday = first.scheduled_date === today;
+                          const canStartTrip = isTripToday && shuttle?.status === 'active' && activeBookings.length > 0;
+                          return (
                           <div className="border-t border-border p-4 space-y-3">
+                            {canStartTrip && (
+                              <Link to="/active-ride">
+                                <Button className="w-full h-12 text-base rounded-xl mb-2" size="lg">
+                                  <Play className="w-5 h-5 me-2" />
+                                  {lang === 'ar' ? 'ابدأ الرحلة الآن' : 'Start This Trip'}
+                                </Button>
+                              </Link>
+                            )}
                             {validWaypoints.length > 0 && (
                               <MapView
                                 className="h-56 rounded-xl overflow-hidden"
