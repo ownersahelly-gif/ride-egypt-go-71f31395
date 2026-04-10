@@ -250,6 +250,24 @@ const ActiveRide = () => {
   const verifyBoarding = async (bookingId: string) => {
     const booking = bookings.find(b => b.id === bookingId);
     if (!booking) return;
+
+    // Check driver is near the passenger's pickup location
+    if (driverLocation) {
+      const pickupLat = booking.custom_pickup_lat ?? route?.origin_lat ?? 0;
+      const pickupLng = booking.custom_pickup_lng ?? route?.origin_lng ?? 0;
+      const dist = haversineDistance(driverLocation, { lat: pickupLat, lng: pickupLng });
+      if (dist > REACH_THRESHOLD_M) {
+        toast({
+          title: lang === 'ar' ? 'بعيد عن نقطة الصعود' : 'Too far from pickup',
+          description: lang === 'ar'
+            ? `يجب أن تكون على بعد ${REACH_THRESHOLD_M} متر من نقطة صعود الراكب`
+            : `You must be within ${REACH_THRESHOLD_M}m of the passenger's pickup point`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     if (booking.boarding_code !== boardingInput) {
       toast({
         title: lang === 'ar' ? 'رمز خاطئ' : 'Wrong Code',
@@ -270,7 +288,6 @@ const ActiveRide = () => {
     setBoardingInput('');
     setVerifyingBooking(null);
     toast({ title: lang === 'ar' ? 'تم التأكيد ✓' : 'Boarded! ✓' });
-    // Auto-advance after boarding
     advanceToNextStop();
   };
 
