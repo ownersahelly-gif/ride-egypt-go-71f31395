@@ -328,11 +328,14 @@ const DriverDashboard = () => {
             {/* Tab bar */}
             <div className="flex gap-1 bg-card border border-border rounded-xl p-1 mb-6">
               {tabs.map(({ key, icon: Icon, label }) => (
-                <button key={key} onClick={() => setTab(key)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                <button key={key} onClick={() => { setTab(key); if (key === 'home') ackBookings(); }}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-colors relative ${
                     tab === key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}>
                   <Icon className="w-4 h-4" />{label}
+                  {key === 'home' && newBookingsCount > 0 && tab !== 'home' && (
+                    <span className="absolute -top-1 -end-1 w-5 h-5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center">{newBookingsCount}</span>
+                  )}
                 </button>
               ))}
             </div>
