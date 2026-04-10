@@ -126,13 +126,16 @@ const CarpoolRoute = () => {
         <h1 className="text-lg font-bold">{lang === 'ar' ? 'تفاصيل الرحلة' : 'Ride Details'}</h1>
       </div>
 
-      {/* Map */}
-      <div className="h-48">
+      {/* Map with driving directions */}
+      <div className="h-56">
         <MapView
           center={{ lat: route.origin_lat, lng: route.origin_lng }}
+          origin={{ lat: route.origin_lat, lng: route.origin_lng }}
+          destination={{ lat: route.destination_lat, lng: route.destination_lng }}
+          showDirections
           markers={[
-            { lat: route.origin_lat, lng: route.origin_lng, label: lang === 'ar' ? 'انطلاق' : 'Start' },
-            { lat: route.destination_lat, lng: route.destination_lng, label: lang === 'ar' ? 'وصول' : 'End' },
+            { lat: route.origin_lat, lng: route.origin_lng, label: lang === 'ar' ? 'انطلاق' : 'Start', color: 'green' },
+            { lat: route.destination_lat, lng: route.destination_lng, label: lang === 'ar' ? 'وصول' : 'End', color: 'red' },
           ]}
           zoom={11}
         />
