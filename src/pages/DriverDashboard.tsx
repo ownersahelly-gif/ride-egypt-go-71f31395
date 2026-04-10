@@ -183,7 +183,7 @@ const DriverDashboard = () => {
     setSelectedRouteForSchedule(routeObj);
     setScheduleForm(prev => ({ ...prev, route_id: routeObj.id }));
     setShowScheduleForm(true);
-    setTimeout(() => scheduleFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    setTimeout(() => scheduleFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
   };
 
   const saveSchedule = async () => {
@@ -205,6 +205,7 @@ const DriverDashboard = () => {
       setShowScheduleForm(false);
       setSelectedRouteForSchedule(null);
       setScheduleForm({ route_id: '', days: [], departure_time: '08:00', return_time: '17:00', is_recurring: true, min_passengers: 5 });
+      setTab('home');
     }
     setSavingSchedule(false);
   };
@@ -428,6 +429,94 @@ const DriverDashboard = () => {
                     </Button>
                   </div>
                 )}
+
+                {/* Active routes with bookings */}
+                {driverSchedules.length > 0 && (() => {
+                  const routeGroups = driverSchedules.reduce((acc: Record<string, any[]>, s) => {
+                    if (!acc[s.route_id]) acc[s.route_id] = [];
+                    acc[s.route_id].push(s);
+                    return acc;
+                  }, {});
+                  return (
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-foreground flex items-center gap-2">
+                        <Route className="w-4 h-4 text-primary" />
+                        {lang === 'ar' ? 'مساراتك النشطة' : 'Your Active Routes'}
+                      </h3>
+                      {Object.entries(routeGroups).map(([routeId, schedules]) => {
+                        const routeInfo = (schedules as any[])[0]?.routes;
+                        const routeBookings = bookings.filter(b => b.route_id === routeId && b.status !== 'cancelled');
+                        return (
+                          <div key={routeId} className="bg-card border border-primary/20 rounded-2xl p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-semibold text-foreground">{lang === 'ar' ? routeInfo?.name_ar : routeInfo?.name_en}</h4>
+                                <p className="text-xs text-muted-foreground">
+                                  {lang === 'ar' ? routeInfo?.origin_name_ar : routeInfo?.origin_name_en} → {lang === 'ar' ? routeInfo?.destination_name_ar : routeInfo?.destination_name_en}
+                                </p>
+                              </div>
+                              <span className="text-sm font-bold text-foreground">{routeInfo?.price} EGP</span>
+                            </div>
+                            {routeInfo?.origin_lat && routeInfo?.destination_lat && (
+                              <MapView
+                                className="h-[150px]"
+                                markers={[
+                                  { lat: routeInfo.origin_lat, lng: routeInfo.origin_lng, label: 'A', color: 'green' },
+                                  { lat: routeInfo.destination_lat, lng: routeInfo.destination_lng, label: 'B', color: 'red' },
+                                ]}
+                                origin={{ lat: routeInfo.origin_lat, lng: routeInfo.origin_lng }}
+                                destination={{ lat: routeInfo.destination_lat, lng: routeInfo.destination_lng }}
+                                showDirections
+                                showUserLocation={false}
+                                zoom={10}
+                              />
+                            )}
+                            <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+                              {(schedules as any[]).sort((a: any, b: any) => a.day_of_week - b.day_of_week).map((s: any) => (
+                                <span key={s.id} className="bg-surface px-2 py-1 rounded-lg">{dayNames[s.day_of_week]} {s.departure_time?.slice(0, 5)}</span>
+                              ))}
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-2">
+                                <Users className="w-3 h-3 inline me-1" />
+                                {lang === 'ar' ? `طلبات الركاب (${routeBookings.length})` : `Passenger Requests (${routeBookings.length})`}
+                              </p>
+                              {routeBookings.length === 0 ? (
+                                <p className="text-xs text-muted-foreground text-center py-2">{lang === 'ar' ? 'لا يوجد طلبات بعد' : 'No requests yet'}</p>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  {routeBookings.slice(0, 5).map(b => {
+                                    const passenger = passengerProfiles[b.user_id];
+                                    return (
+                                      <div key={b.id} className="flex items-center justify-between bg-surface rounded-xl px-3 py-2">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center"><User className="w-3.5 h-3.5 text-primary" /></div>
+                                          <div>
+                                            <p className="text-xs font-medium text-foreground">{passenger?.full_name || (lang === 'ar' ? 'راكب' : 'Rider')}</p>
+                                            <p className="text-[10px] text-muted-foreground">{b.scheduled_date} · {b.scheduled_time?.slice(0, 5)} · {b.seats} {t('booking.seat')}</p>
+                                          </div>
+                                        </div>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusColors[b.status]}`}>{t(`booking.status.${b.status}`)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                  {routeBookings.length > 5 && (
+                                    <p className="text-xs text-primary text-center cursor-pointer" onClick={() => setTab('trips')}>
+                                      +{routeBookings.length - 5} {lang === 'ar' ? 'المزيد' : 'more'}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <Button variant="outline" size="sm" onClick={() => setTab('schedule')} className="w-full">
+                        <Plus className="w-4 h-4 me-1" />{lang === 'ar' ? 'إضافة مسار آخر' : 'Add Another Route'}
+                      </Button>
+                    </div>
+                  );
+                })()}
 
                 {/* All-time stats */}
                 <div className="bg-card border border-border rounded-2xl p-4">
