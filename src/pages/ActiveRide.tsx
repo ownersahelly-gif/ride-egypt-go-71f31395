@@ -63,26 +63,39 @@ const ActiveRide = () => {
 
   const fetchData = useCallback(async () => {
     if (!user) return;
-    const { data: shuttleData } = await supabase
+    const today = new Date().toISOString().split('T')[0];
+
+    // Find the shuttle that has today's bookings (not just any shuttle)
+    const { data: allShuttles } = await supabase
       .from('shuttles')
       .select('*, routes(*)')
-      .eq('driver_id', user.id)
-      .limit(1)
-      .maybeSingle();
+      .eq('driver_id', user.id);
 
-    if (!shuttleData) { setLoading(false); return; }
-    setShuttle(shuttleData);
-    setRoute(shuttleData.routes);
+    let chosenShuttle: any = null;
+    let bks: any[] = [];
 
-    const today = new Date().toISOString().split('T')[0];
-    const { data: bookingsData } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('shuttle_id', shuttleData.id)
-      .eq('scheduled_date', today)
-      .in('status', ['confirmed', 'boarded']);
+    for (const s of (allShuttles || [])) {
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('shuttle_id', s.id)
+        .eq('scheduled_date', today)
+        .in('status', ['confirmed', 'boarded']);
+      if (bookingsData && bookingsData.length > 0) {
+        chosenShuttle = s;
+        bks = bookingsData;
+        break;
+      }
+    }
 
-    const bks = bookingsData || [];
+    if (!chosenShuttle) {
+      // Fallback to first shuttle
+      chosenShuttle = allShuttles?.[0] || null;
+    }
+
+    if (!chosenShuttle) { setLoading(false); return; }
+    setShuttle(chosenShuttle);
+    setRoute(chosenShuttle.routes);
     setBookings(bks);
 
     const userIds = [...new Set(bks.map(b => b.user_id))];
@@ -384,7 +397,7 @@ const ActiveRide = () => {
               )}
             </div>
 
-            <div className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
+            <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
               <MapPin className="w-4 h-4 shrink-0" />
               <span>{currentStop.locationName}</span>
               {currentStop.isCustom && (
@@ -393,6 +406,20 @@ const ActiveRide = () => {
                 </span>
               )}
             </div>
+
+            {/* Navigate with Google Maps — opens turn-by-turn directions */}
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${currentStop.lat},${currentStop.lng}&travelmode=driving`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mb-4 block"
+            >
+              <Button variant="secondary" className="w-full gap-2">
+                <Navigation className="w-4 h-4" />
+                {lang === 'ar' ? 'افتح الملاحة في خرائط جوجل' : 'Navigate in Google Maps'}
+                <ArrowRight className="w-4 h-4 ms-auto" />
+              </Button>
+            </a>
 
             {/* Action buttons */}
             {currentStop.type === 'pickup' ? (
