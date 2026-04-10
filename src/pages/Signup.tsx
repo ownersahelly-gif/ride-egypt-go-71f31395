@@ -545,8 +545,8 @@ const Signup = () => {
               />
 
               <div className="space-y-2">
-                <Label>{lang === 'ar' ? 'رقم الرخصة' : 'License Number'}</Label>
-                <Input placeholder={lang === 'ar' ? 'رقم رخصة القيادة' : 'Driving license number'} value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} required />
+                <Label>{lang === 'ar' ? 'رقم لوحة السيارة' : 'Car License Plate Number'}</Label>
+                <Input placeholder={lang === 'ar' ? 'مثال: ن س ر ١ ١ ١' : 'e.g. ABC 123'} value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} required />
               </div>
 
               {/* Uber/Careem */}
