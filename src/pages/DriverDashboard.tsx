@@ -1203,7 +1203,8 @@ const DriverDashboard = () => {
                               })}
                             </div>
                           </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     );
                   })}
