@@ -438,14 +438,14 @@ const AdminPanel = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-foreground">{lang === 'ar' ? 'إدارة المسارات' : 'Route Management'}</h2>
-              <Button onClick={() => setShowRouteForm(!showRouteForm)}>
+              <Button onClick={() => { setEditingRouteId(null); setRouteForm({ name_en: '', name_ar: '', origin_name_en: '', origin_name_ar: '', destination_name_en: '', destination_name_ar: '', origin_lat: 30.0444, origin_lng: 31.2357, destination_lat: 30.0131, destination_lng: 31.2089, price: 25, estimated_duration_minutes: 30 }); setShowRouteForm(!showRouteForm); }}>
                 <Plus className="w-4 h-4 me-1" />{lang === 'ar' ? 'مسار جديد' : 'New Route'}
               </Button>
             </div>
 
             {showRouteForm && (
               <div className="bg-card border border-border rounded-xl p-6 space-y-4">
-                <h3 className="font-semibold text-foreground">{lang === 'ar' ? 'إنشاء مسار' : 'Create Route'}</h3>
+                <h3 className="font-semibold text-foreground">{editingRouteId ? (lang === 'ar' ? 'تعديل المسار' : 'Edit Route') : (lang === 'ar' ? 'إنشاء مسار' : 'Create Route')}</h3>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Name (EN)</Label>
@@ -512,9 +512,9 @@ const AdminPanel = () => {
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={createRoute} disabled={!routeForm.name_en || !routeForm.name_ar}>
-                    <CheckCircle2 className="w-4 h-4 me-1" />{lang === 'ar' ? 'إنشاء' : 'Create'}
+                    <CheckCircle2 className="w-4 h-4 me-1" />{editingRouteId ? (lang === 'ar' ? 'تحديث' : 'Update') : (lang === 'ar' ? 'إنشاء' : 'Create')}
                   </Button>
-                  <Button variant="outline" onClick={() => setShowRouteForm(false)}>
+                  <Button variant="outline" onClick={() => { setShowRouteForm(false); setEditingRouteId(null); }}>
                     {lang === 'ar' ? 'إلغاء' : 'Cancel'}
                   </Button>
                 </div>
@@ -539,6 +539,9 @@ const AdminPanel = () => {
                   <span><Clock className="w-3 h-3 inline me-1" />{route.estimated_duration_minutes} min</span>
                 </div>
                 <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => startEditRoute(route)}>
+                    <Edit className="w-3.5 h-3.5 me-1" />{lang === 'ar' ? 'تعديل' : 'Edit'}
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => toggleRouteStatus(route.id, route.status)}>
                     {route.status === 'active' ? (lang === 'ar' ? 'تعطيل' : 'Deactivate') : (lang === 'ar' ? 'تفعيل' : 'Activate')}
                   </Button>
