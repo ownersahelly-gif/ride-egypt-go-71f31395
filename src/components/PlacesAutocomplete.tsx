@@ -101,7 +101,7 @@ const PlacesAutocomplete = ({ placeholder, value, onSelect, iconColor = 'text-pr
   return (
     <div className="relative" ref={containerRef}>
       <MapPin className={`absolute start-3 top-3 h-4 w-4 ${iconColor}`} />
-      <Input placeholder={placeholder} className="ps-10" value={inputValue}
+      <Input placeholder={placeholder} className={`ps-10 ${className || ''}`} value={inputValue}
         onChange={(e) => handleInput(e.target.value)} onFocus={() => predictions.length > 0 && setShowDropdown(true)} />
       {showDropdown && predictions.length > 0 && (
         <div className="absolute z-50 top-full mt-1 w-full bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
