@@ -494,10 +494,12 @@ const DriverDashboard = () => {
                                 </div>
                               </div>
                             )}
-                            {/* Per-day passenger breakdown */}
+                            {/* Per-day passenger breakdown with go/return counts */}
                             <div className="space-y-1.5">
                               {(schedules as any[]).sort((a: any, b: any) => a.day_of_week - b.day_of_week).map((s: any) => {
                                 const dayBookings = bookingsByDay[s.day_of_week] || [];
+                                const goCount = dayBookings.filter((b: any) => b.trip_direction === 'go' || b.trip_direction === 'both').length;
+                                const returnCount = dayBookings.filter((b: any) => b.trip_direction === 'return' || b.trip_direction === 'both').length;
                                 return (
                                   <div key={s.id} className="flex items-center justify-between bg-surface rounded-lg px-3 py-2">
                                     <div className="flex items-center gap-2 text-sm">
@@ -505,9 +507,12 @@ const DriverDashboard = () => {
                                       {s.departure_time && <><Clock className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-muted-foreground">{s.departure_time?.slice(0, 5)}</span></>}
                                       {s.return_time && <><ArrowRight className="w-3 h-3 text-muted-foreground" /><span className="text-muted-foreground">{s.return_time?.slice(0, 5)}</span></>}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                                        <Users className="w-3 h-3 inline me-1" />{dayBookings.length}
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full" title={lang === 'ar' ? 'ذهاب' : 'Going'}>
+                                        → {goCount}
+                                      </span>
+                                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full" title={lang === 'ar' ? 'عودة' : 'Return'}>
+                                        ← {returnCount}
                                       </span>
                                     </div>
                                   </div>
