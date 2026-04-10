@@ -263,6 +263,39 @@ const ActiveRide = () => {
     }
   };
 
+  const skipPassenger = async (bookingId: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) { advanceToNextStop(); return; }
+
+    const refundAmount = Math.round(parseFloat(booking.total_price || 0) * 0.5 * 100) / 100;
+
+    const { error } = await supabase.from('bookings').update({
+      status: 'cancelled',
+      skipped_at: new Date().toISOString(),
+      driver_arrived_at: arrivedAt ? new Date(arrivedAt).toISOString() : new Date().toISOString(),
+      skip_refund_amount: refundAmount,
+    }).eq('id', bookingId);
+
+    if (error) {
+      toast({ title: t('auth.error'), description: error.message, variant: 'destructive' });
+      return;
+    }
+
+    setBookings(prev => prev.map(b => b.id === bookingId
+      ? { ...b, status: 'cancelled', skipped_at: new Date().toISOString(), skip_refund_amount: refundAmount }
+      : b
+    ));
+
+    toast({
+      title: lang === 'ar' ? 'تم تخطي الراكب' : 'Passenger Skipped',
+      description: lang === 'ar'
+        ? `سيتم استرداد ${refundAmount} جنيه (50%) للراكب`
+        : `${refundAmount} EGP (50%) will be refunded to the passenger`,
+    });
+
+    advanceToNextStop();
+  };
+
   const goToPreviousStop = () => {
     if (currentStopIndex > 0) {
       setCurrentStopIndex(prev => prev - 1);
