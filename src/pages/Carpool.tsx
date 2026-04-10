@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,7 +11,7 @@ import MapView from '@/components/MapView';
 import {
   Plus, MapPin, Clock, Users, Fuel, RefreshCw, Car,
   ChevronRight, ChevronLeft, Search, Filter, Shield, AlertCircle,
-  Map, List, X
+  Map, List, X, Navigation
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -21,106 +21,54 @@ import {
 
 const DEMO_ROUTES = [
   {
-    id: 'demo-1',
-    user_id: 'demo-user-1',
-    origin_name: 'Maadi, Cairo',
-    origin_lat: 29.9602,
-    origin_lng: 31.2569,
-    destination_name: 'Smart Village, 6th October',
-    destination_lat: 30.0711,
-    destination_lng: 31.0175,
-    departure_time: '07:30:00',
-    available_seats: 3,
-    is_daily: true,
-    days_of_week: [0, 1, 2, 3, 4],
-    share_fuel: true,
-    fuel_share_amount: 25,
-    allow_car_swap: true,
-    notes: 'Leaving sharp at 7:30. AC car.',
-    status: 'active',
-    created_at: new Date().toISOString(),
+    id: 'demo-1', user_id: 'demo-user-1',
+    origin_name: 'Maadi, Cairo', origin_lat: 29.9602, origin_lng: 31.2569,
+    destination_name: 'Smart Village, 6th October', destination_lat: 30.0711, destination_lng: 31.0175,
+    departure_time: '07:30:00', available_seats: 3, is_daily: true, days_of_week: [0, 1, 2, 3, 4],
+    share_fuel: true, fuel_share_amount: 25, allow_car_swap: true,
+    notes: 'Leaving sharp at 7:30. AC car.', status: 'active', created_at: new Date().toISOString(),
   },
   {
-    id: 'demo-2',
-    user_id: 'demo-user-2',
-    origin_name: 'Heliopolis, Cairo',
-    origin_lat: 30.0870,
-    origin_lng: 31.3225,
-    destination_name: 'Cairo University',
-    destination_lat: 30.0261,
-    destination_lng: 31.2118,
-    departure_time: '08:00:00',
-    available_seats: 2,
-    is_daily: true,
-    days_of_week: [0, 1, 2, 3],
-    share_fuel: true,
-    fuel_share_amount: 20,
-    allow_car_swap: false,
-    notes: null,
-    status: 'active',
-    created_at: new Date().toISOString(),
+    id: 'demo-2', user_id: 'demo-user-2',
+    origin_name: 'Heliopolis, Cairo', origin_lat: 30.0870, origin_lng: 31.3225,
+    destination_name: 'Cairo University', destination_lat: 30.0261, destination_lng: 31.2118,
+    departure_time: '08:00:00', available_seats: 2, is_daily: true, days_of_week: [0, 1, 2, 3],
+    share_fuel: true, fuel_share_amount: 20, allow_car_swap: false,
+    notes: null, status: 'active', created_at: new Date().toISOString(),
   },
   {
-    id: 'demo-3',
-    user_id: 'demo-user-3',
-    origin_name: 'Nasr City, Cairo',
-    origin_lat: 30.0626,
-    origin_lng: 31.3387,
-    destination_name: 'New Cairo, AUC',
-    destination_lat: 30.0194,
-    destination_lng: 31.4998,
-    departure_time: '09:00:00',
-    available_seats: 4,
-    is_daily: false,
-    days_of_week: [],
-    share_fuel: false,
-    fuel_share_amount: 0,
-    allow_car_swap: false,
-    notes: 'One-time trip on Thursday.',
-    status: 'active',
-    created_at: new Date().toISOString(),
+    id: 'demo-3', user_id: 'demo-user-3',
+    origin_name: 'Nasr City, Cairo', origin_lat: 30.0626, origin_lng: 31.3387,
+    destination_name: 'New Cairo, AUC', destination_lat: 30.0194, destination_lng: 31.4998,
+    departure_time: '09:00:00', available_seats: 4, is_daily: false, days_of_week: [],
+    share_fuel: false, fuel_share_amount: 0, allow_car_swap: false,
+    notes: 'One-time trip on Thursday.', status: 'active', created_at: new Date().toISOString(),
   },
   {
-    id: 'demo-4',
-    user_id: 'demo-user-4',
-    origin_name: 'Zamalek, Cairo',
-    origin_lat: 30.0609,
-    origin_lng: 31.2194,
-    destination_name: 'New Administrative Capital',
-    destination_lat: 30.0197,
-    destination_lng: 31.7601,
-    departure_time: '06:30:00',
-    available_seats: 3,
-    is_daily: true,
-    days_of_week: [0, 1, 2, 3, 4],
-    share_fuel: true,
-    fuel_share_amount: 40,
-    allow_car_swap: true,
-    notes: 'Daily commute to NAC. Fuel split equally.',
-    status: 'active',
-    created_at: new Date().toISOString(),
+    id: 'demo-4', user_id: 'demo-user-4',
+    origin_name: 'Zamalek, Cairo', origin_lat: 30.0609, origin_lng: 31.2194,
+    destination_name: 'New Administrative Capital', destination_lat: 30.0197, destination_lng: 31.7601,
+    departure_time: '06:30:00', available_seats: 3, is_daily: true, days_of_week: [0, 1, 2, 3, 4],
+    share_fuel: true, fuel_share_amount: 40, allow_car_swap: true,
+    notes: 'Daily commute to NAC. Fuel split equally.', status: 'active', created_at: new Date().toISOString(),
   },
   {
-    id: 'demo-5',
-    user_id: 'demo-user-5',
-    origin_name: 'Dokki, Giza',
-    origin_lat: 30.0382,
-    origin_lng: 31.2012,
-    destination_name: 'Ain Shams University',
-    destination_lat: 30.0793,
-    destination_lng: 31.2834,
-    departure_time: '07:00:00',
-    available_seats: 2,
-    is_daily: true,
-    days_of_week: [0, 1, 2, 3, 4],
-    share_fuel: true,
-    fuel_share_amount: 15,
-    allow_car_swap: false,
-    notes: null,
-    status: 'active',
-    created_at: new Date().toISOString(),
+    id: 'demo-5', user_id: 'demo-user-5',
+    origin_name: 'Dokki, Giza', origin_lat: 30.0382, origin_lng: 31.2012,
+    destination_name: 'Ain Shams University', destination_lat: 30.0793, destination_lng: 31.2834,
+    departure_time: '07:00:00', available_seats: 2, is_daily: true, days_of_week: [0, 1, 2, 3, 4],
+    share_fuel: true, fuel_share_amount: 15, allow_car_swap: false,
+    notes: null, status: 'active', created_at: new Date().toISOString(),
   },
 ];
+
+function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 const Carpool = () => {
   const { user } = useAuth();
@@ -136,11 +84,24 @@ const Carpool = () => {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'browse' | 'my-rides' | 'my-routes'>('browse');
   const [browseMode, setBrowseMode] = useState<'list' | 'map'>('list');
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // Filters
   const [filterTime, setFilterTime] = useState<string>('');
   const [filterDay, setFilterDay] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string>('recent');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Get user location on mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -187,8 +148,8 @@ const Carpool = () => {
       supabase.from('carpool_verifications').select('*').eq('user_id', user!.id).maybeSingle(),
     ]);
     const dbRoutes = routesRes.data || [];
-    // Merge demo routes if DB is empty
-    const allRoutes = dbRoutes.length > 0 ? dbRoutes : [...DEMO_ROUTES, ...dbRoutes];
+    // Always include demo routes — they have unique demo-* ids so no duplicates
+    const allRoutes = [...dbRoutes, ...DEMO_ROUTES];
     setRoutes(allRoutes);
     setMyRequests(requestsRes.data || []);
     setVerification(verRes.data);
@@ -222,9 +183,22 @@ const Carpool = () => {
     return true;
   });
 
+  // Sort
+  const sortedRoutes = [...filteredRoutes].sort((a, b) => {
+    if (sortBy === 'nearby' && userLocation) {
+      const distA = getDistanceKm(userLocation.lat, userLocation.lng, a.origin_lat, a.origin_lng);
+      const distB = getDistanceKm(userLocation.lat, userLocation.lng, b.origin_lat, b.origin_lng);
+      return distA - distB;
+    }
+    if (sortBy === 'time') {
+      return (a.departure_time || '').localeCompare(b.departure_time || '');
+    }
+    return 0; // recent = default DB order
+  });
+
   const myRoutes = routes.filter(r => r.user_id === user?.id);
 
-  const mapMarkers = filteredRoutes.flatMap(r => [
+  const mapMarkers = sortedRoutes.flatMap(r => [
     { lat: r.origin_lat, lng: r.origin_lng, label: r.origin_name?.slice(0, 15), color: 'green' as const },
     { lat: r.destination_lat, lng: r.destination_lng, label: r.destination_name?.slice(0, 15), color: 'red' as const },
   ]);
@@ -297,7 +271,7 @@ const Carpool = () => {
       <div className="p-4 space-y-4">
         {tab === 'browse' && (
           <>
-            {/* Search + Filter + View Toggle */}
+            {/* Search + Filter + Sort + View Toggle */}
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -324,45 +298,62 @@ const Carpool = () => {
               </Button>
             </div>
 
-            {/* Filter Panel */}
+            {/* Filter & Sort Panel */}
             {showFilters && (
               <Card>
                 <CardContent className="p-3 space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">{lang === 'ar' ? 'تصفية' : 'Filters'}</p>
+                    <p className="text-sm font-medium">{lang === 'ar' ? 'تصفية وترتيب' : 'Filter & Sort'}</p>
                     {hasActiveFilters && (
                       <Button variant="ghost" size="sm" onClick={() => { setFilterTime(''); setFilterDay(''); }}>
                         <X className="w-3 h-3 mr-1" />{lang === 'ar' ? 'مسح' : 'Clear'}
                       </Button>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">
-                        {lang === 'ar' ? 'وقت المغادرة' : 'Departure Time'}
+                        {lang === 'ar' ? 'الترتيب' : 'Sort'}
                       </label>
-                      <Select value={filterTime} onValueChange={setFilterTime}>
+                      <Select value={sortBy} onValueChange={setSortBy}>
                         <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder={lang === 'ar' ? 'أي وقت' : 'Any time'} />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="early">{lang === 'ar' ? 'مبكر (قبل 8)' : 'Early (before 8am)'}</SelectItem>
-                          <SelectItem value="morning">{lang === 'ar' ? 'صباحي (8-10)' : 'Morning (8-10am)'}</SelectItem>
-                          <SelectItem value="midday">{lang === 'ar' ? 'ظهر (10-2)' : 'Midday (10am-2pm)'}</SelectItem>
-                          <SelectItem value="afternoon">{lang === 'ar' ? 'عصر (بعد 2)' : 'Afternoon (after 2pm)'}</SelectItem>
+                          <SelectItem value="recent">{lang === 'ar' ? 'الأحدث' : 'Recent'}</SelectItem>
+                          <SelectItem value="nearby">
+                            <span className="flex items-center gap-1"><Navigation className="w-3 h-3" />{lang === 'ar' ? 'الأقرب' : 'Nearby'}</span>
+                          </SelectItem>
+                          <SelectItem value="time">{lang === 'ar' ? 'الوقت' : 'By time'}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">
-                        {lang === 'ar' ? 'يوم الأسبوع' : 'Day of Week'}
+                        {lang === 'ar' ? 'وقت المغادرة' : 'Time'}
+                      </label>
+                      <Select value={filterTime} onValueChange={setFilterTime}>
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue placeholder={lang === 'ar' ? 'أي وقت' : 'Any'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="early">{lang === 'ar' ? 'قبل 8' : '<8am'}</SelectItem>
+                          <SelectItem value="morning">{lang === 'ar' ? '8-10' : '8-10am'}</SelectItem>
+                          <SelectItem value="midday">{lang === 'ar' ? '10-2' : '10-2pm'}</SelectItem>
+                          <SelectItem value="afternoon">{lang === 'ar' ? 'بعد 2' : '>2pm'}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        {lang === 'ar' ? 'اليوم' : 'Day'}
                       </label>
                       <Select value={filterDay} onValueChange={setFilterDay}>
                         <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder={lang === 'ar' ? 'أي يوم' : 'Any day'} />
+                          <SelectValue placeholder={lang === 'ar' ? 'أي يوم' : 'Any'} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="any">{lang === 'ar' ? 'أي يوم' : 'Any day'}</SelectItem>
+                          <SelectItem value="any">{lang === 'ar' ? 'أي يوم' : 'Any'}</SelectItem>
                           {dayNames.map((name, i) => (
                             <SelectItem key={i} value={String(i)}>{name}</SelectItem>
                           ))}
@@ -372,6 +363,13 @@ const Carpool = () => {
                   </div>
                 </CardContent>
               </Card>
+            )}
+
+            {/* Nearby badge when sorted */}
+            {sortBy === 'nearby' && !userLocation && (
+              <p className="text-xs text-muted-foreground text-center">
+                {lang === 'ar' ? 'يرجى السماح بالموقع للترتيب حسب القرب' : 'Allow location access to sort by proximity'}
+              </p>
             )}
 
             {/* Map View */}
@@ -386,7 +384,7 @@ const Carpool = () => {
               <div className="text-center py-12 text-muted-foreground">
                 {lang === 'ar' ? 'جاري التحميل...' : 'Loading...'}
               </div>
-            ) : filteredRoutes.length === 0 ? (
+            ) : sortedRoutes.length === 0 ? (
               <div className="text-center py-12">
                 <Car className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
                 <p className="text-muted-foreground">
@@ -402,73 +400,82 @@ const Carpool = () => {
                 )}
               </div>
             ) : (
-              filteredRoutes.map(route => (
-                <Card
-                  key={route.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => {
-                    if (route.id.startsWith('demo-')) {
-                      toast({ title: lang === 'ar' ? 'تجريبي' : 'Demo', description: lang === 'ar' ? 'هذه رحلة تجريبية' : 'This is a demo ride' });
-                      return;
-                    }
-                    navigate(`/carpool/route/${route.id}`);
-                  }}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-2 h-2 rounded-full bg-green-500" />
-                          <p className="text-sm font-medium truncate">{route.origin_name}</p>
+              sortedRoutes.map(route => {
+                const distKm = userLocation ? getDistanceKm(userLocation.lat, userLocation.lng, route.origin_lat, route.origin_lng) : null;
+                return (
+                  <Card
+                    key={route.id}
+                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => {
+                      if (route.id.startsWith('demo-')) {
+                        toast({ title: lang === 'ar' ? 'تجريبي' : 'Demo', description: lang === 'ar' ? 'هذه رحلة تجريبية' : 'This is a demo ride' });
+                        return;
+                      }
+                      navigate(`/carpool/route/${route.id}`);
+                    }}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                            <p className="text-sm font-medium truncate">{route.origin_name}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-destructive shrink-0" />
+                            <p className="text-sm font-medium truncate">{route.destination_name}</p>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-destructive" />
-                          <p className="text-sm font-medium truncate">{route.destination_name}</p>
+                        <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                          {route.id.startsWith('demo-') && (
+                            <Badge variant="outline" className="text-[10px]">{lang === 'ar' ? 'تجريبي' : 'Demo'}</Badge>
+                          )}
+                          {route.share_fuel && route.fuel_share_amount > 0 && (
+                            <Badge variant="secondary">
+                              <Fuel className="w-3 h-3 mr-1" />
+                              EGP {route.fuel_share_amount}
+                            </Badge>
+                          )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        {route.id.startsWith('demo-') && (
-                          <Badge variant="outline" className="text-[10px] mb-1">{lang === 'ar' ? 'تجريبي' : 'Demo'}</Badge>
+                      <div className="flex items-center flex-wrap gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {route.departure_time?.slice(0, 5)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {route.available_seats} {lang === 'ar' ? 'مقاعد' : 'seats'}
+                        </span>
+                        {distKm !== null && (
+                          <span className="flex items-center gap-1">
+                            <Navigation className="w-3 h-3" />
+                            {distKm < 1 ? `${Math.round(distKm * 1000)}m` : `${distKm.toFixed(1)}km`}
+                          </span>
                         )}
-                        {route.share_fuel && route.fuel_share_amount > 0 && (
-                          <Badge variant="secondary" className="mb-1">
-                            <Fuel className="w-3 h-3 mr-1" />
-                            EGP {route.fuel_share_amount}
+                        {route.is_daily && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {lang === 'ar' ? 'يومي' : 'Daily'}
+                          </Badge>
+                        )}
+                        {route.allow_car_swap && (
+                          <Badge variant="outline" className="text-[10px]">
+                            <RefreshCw className="w-2.5 h-2.5 mr-0.5" />
+                            {lang === 'ar' ? 'تبادل' : 'Swap'}
                           </Badge>
                         )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {route.departure_time?.slice(0, 5)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3 h-3" />
-                        {route.available_seats} {lang === 'ar' ? 'مقاعد' : 'seats'}
-                      </span>
-                      {route.is_daily && (
-                        <Badge variant="outline" className="text-[10px]">
-                          {lang === 'ar' ? 'يومي' : 'Daily'}
-                        </Badge>
+                      {route.is_daily && route.days_of_week?.length > 0 && (
+                        <div className="flex gap-1 mt-2">
+                          {route.days_of_week.map((d: number) => (
+                            <span key={d} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">{dayNames[d]}</span>
+                          ))}
+                        </div>
                       )}
-                      {route.allow_car_swap && (
-                        <Badge variant="outline" className="text-[10px]">
-                          <RefreshCw className="w-2.5 h-2.5 mr-0.5" />
-                          {lang === 'ar' ? 'تبادل' : 'Swap'}
-                        </Badge>
-                      )}
-                    </div>
-                    {route.is_daily && route.days_of_week?.length > 0 && (
-                      <div className="flex gap-1 mt-2">
-                        {route.days_of_week.map((d: number) => (
-                          <span key={d} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">{dayNames[d]}</span>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
           </>
         )}
