@@ -764,24 +764,57 @@ const DriverDashboard = () => {
                     const routeDestination = routeObj ? { lat: routeObj.destination_lat, lng: routeObj.destination_lng } : { lat: 30.06, lng: 31.25 };
                     const optimizedWaypoints = isExpanded ? optimizePassengerOrder(activeBookings, routeOrigin, routeDestination) : [];
 
-                    // Build map markers: blue for route start/end, orange for pickups, purple for dropoffs
-                    const validWaypoints = optimizedWaypoints.filter(wp => wp?.coords);
+                    // Merge passengers at same location into single markers
+                    const mergeNearbyMarkers = (wps: typeof validWaypoints) => {
+                      const merged: { lat: number; lng: number; label: string; color: 'orange' | 'purple' }[] = [];
+                      const THRESHOLD = 0.002; // ~200m
+                      wps.forEach(wp => {
+                        const existing = merged.find(m => 
+                          Math.abs(m.lat - wp.coords.lat) < THRESHOLD && 
+                          Math.abs(m.lng - wp.coords.lng) < THRESHOLD && 
+                          m.color === (wp.type === 'pickup' ? 'orange' : 'purple')
+                        );
+                        if (existing) {
+                          existing.label += ` & ${wp.label}`;
+                        } else {
+                          merged.push({
+                            lat: wp.coords.lat,
+                            lng: wp.coords.lng,
+                            label: wp.label,
+                            color: wp.type === 'pickup' ? 'orange' : 'purple',
+                          });
+                        }
+                      });
+                      return merged;
+                    };
+
+                    const mergedMarkers = isExpanded ? mergeNearbyMarkers(validWaypoints) : [];
                     const mapMarkers = isExpanded ? [
-                      { lat: routeOrigin.lat, lng: routeOrigin.lng, label: lang === 'ar' ? 'أ' : 'A', color: 'blue' as const },
-                      ...validWaypoints.map((wp, i) => ({
-                        lat: wp.coords.lat,
-                        lng: wp.coords.lng,
+                      { lat: routeOrigin.lat, lng: routeOrigin.lng, label: 'A', color: 'green' as const },
+                      ...mergedMarkers.map((m, i) => ({
+                        lat: m.lat,
+                        lng: m.lng,
                         label: `${i + 1}`,
-                        color: wp.type === 'pickup' ? ('orange' as const) : ('purple' as const),
+                        color: m.color as 'orange' | 'purple',
                       })),
-                      { lat: routeDestination.lat, lng: routeDestination.lng, label: lang === 'ar' ? 'ب' : 'B', color: 'blue' as const },
+                      { lat: routeDestination.lat, lng: routeDestination.lng, label: 'B', color: 'red' as const },
                     ] : [];
 
-                    // Build waypoints for directions line to pass through ALL stops
-                    const directionWaypoints = isExpanded ? validWaypoints.map(wp => ({
-                      lat: wp.coords.lat,
-                      lng: wp.coords.lng,
-                    })) : [];
+                    // Build waypoints for directions line - dedupe nearby coords
+                    const dedupeWaypoints = (wps: typeof validWaypoints) => {
+                      const unique: { lat: number; lng: number }[] = [];
+                      const THRESHOLD = 0.002;
+                      wps.forEach(wp => {
+                        const exists = unique.some(u => 
+                          Math.abs(u.lat - wp.coords.lat) < THRESHOLD && 
+                          Math.abs(u.lng - wp.coords.lng) < THRESHOLD
+                        );
+                        if (!exists) unique.push({ lat: wp.coords.lat, lng: wp.coords.lng });
+                      });
+                      return unique;
+                    };
+
+                    const directionWaypoints = isExpanded ? dedupeWaypoints(validWaypoints) : [];
 
                     return (
                       <div key={key} className="bg-card border border-border rounded-2xl overflow-hidden">
