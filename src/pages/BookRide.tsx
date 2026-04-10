@@ -295,6 +295,30 @@ const BookRide = () => {
   const isPickupValid = pickupMode === 'start' ? true : (!!customPickup && pickupResult?.ok === true);
   const isDropoffValid = dropoffMode === 'end' ? true : (!!customDropoff && dropoffResult?.ok === true);
 
+  // Distance-based pricing: price proportional to km traveled
+  const calcDynamicPrice = useCallback(() => {
+    if (!selectedRide?.routes) return selectedRide?.routes?.price || 0;
+    const route = selectedRide.routes;
+    const fullRouteKm = haversineDistanceKm(
+      { lat: route.origin_lat, lng: route.origin_lng },
+      { lat: route.destination_lat, lng: route.destination_lng }
+    );
+    if (fullRouteKm < 0.1) return route.price;
+
+    const pLat = pickupMode === 'start' ? route.origin_lat : (customPickup?.lat ?? route.origin_lat);
+    const pLng = pickupMode === 'start' ? route.origin_lng : (customPickup?.lng ?? route.origin_lng);
+    const dLat = dropoffMode === 'end' ? route.destination_lat : (customDropoff?.lat ?? route.destination_lat);
+    const dLng = dropoffMode === 'end' ? route.destination_lng : (customDropoff?.lng ?? route.destination_lng);
+
+    const passengerKm = haversineDistanceKm({ lat: pLat, lng: pLng }, { lat: dLat, lng: dLng });
+    const ratio = Math.min(1, passengerKm / fullRouteKm);
+    // Minimum 30% of full price
+    const adjustedRatio = Math.max(0.3, ratio);
+    return Math.round(route.price * adjustedRatio);
+  }, [selectedRide, pickupMode, dropoffMode, customPickup, customDropoff]);
+
+  const dynamicPrice = calcDynamicPrice();
+
   // InstaPay payment proof
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [paymentPreview, setPaymentPreview] = useState<string | null>(null);
