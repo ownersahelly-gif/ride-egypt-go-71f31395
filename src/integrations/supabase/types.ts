@@ -148,6 +148,66 @@ export type Database = {
           },
         ]
       }
+      bundle_purchases: {
+        Row: {
+          bundle_id: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          payment_proof_url: string | null
+          purchased_at: string
+          rides_remaining: number
+          rides_total: number
+          route_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bundle_id?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          payment_proof_url?: string | null
+          purchased_at?: string
+          rides_remaining?: number
+          rides_total?: number
+          route_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bundle_id?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          payment_proof_url?: string | null
+          purchased_at?: string
+          rides_remaining?: number
+          rides_total?: number
+          route_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bundle_purchases_bundle_id_fkey"
+            columns: ["bundle_id"]
+            isOneToOne: false
+            referencedRelation: "ride_bundles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bundle_purchases_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_applications: {
         Row: {
           car_license_url: string | null
@@ -341,6 +401,50 @@ export type Database = {
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ride_bundles: {
+        Row: {
+          bundle_type: string
+          created_at: string
+          discount_percentage: number
+          id: string
+          is_active: boolean
+          price: number
+          ride_count: number
+          route_id: string
+          updated_at: string
+        }
+        Insert: {
+          bundle_type?: string
+          created_at?: string
+          discount_percentage?: number
+          id?: string
+          is_active?: boolean
+          price?: number
+          ride_count?: number
+          route_id: string
+          updated_at?: string
+        }
+        Update: {
+          bundle_type?: string
+          created_at?: string
+          discount_percentage?: number
+          id?: string
+          is_active?: boolean
+          price?: number
+          ride_count?: number
+          route_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ride_bundles_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
             referencedColumns: ["id"]
           },
         ]
@@ -548,6 +652,62 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      saved_locations: {
+        Row: {
+          created_at: string
+          dropoff_lat: number | null
+          dropoff_lng: number | null
+          dropoff_name: string | null
+          id: string
+          label: string | null
+          pickup_lat: number | null
+          pickup_lng: number | null
+          pickup_name: string | null
+          route_id: string
+          updated_at: string
+          use_count: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
+          dropoff_name?: string | null
+          id?: string
+          label?: string | null
+          pickup_lat?: number | null
+          pickup_lng?: number | null
+          pickup_name?: string | null
+          route_id: string
+          updated_at?: string
+          use_count?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
+          dropoff_name?: string | null
+          id?: string
+          label?: string | null
+          pickup_lat?: number | null
+          pickup_lng?: number | null
+          pickup_name?: string | null
+          route_id?: string
+          updated_at?: string
+          use_count?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_locations_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shuttle_schedules: {
         Row: {
