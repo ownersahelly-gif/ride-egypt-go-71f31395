@@ -30,6 +30,20 @@ const haversineDistanceKm = (a: { lat: number; lng: number }, b: { lat: number; 
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 };
 
+/** Project point onto the closest position on line segment A→B (in lat/lng space) */
+const closestPointOnSegment = (
+  p: { lat: number; lng: number },
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): { lat: number; lng: number } => {
+  const dx = b.lng - a.lng;
+  const dy = b.lat - a.lat;
+  if (dx === 0 && dy === 0) return a; // segment is a point
+  let t = ((p.lng - a.lng) * dx + (p.lat - a.lat) * dy) / (dx * dx + dy * dy);
+  t = Math.max(0, Math.min(1, t));
+  return { lat: a.lat + t * dy, lng: a.lng + t * dx };
+};
+
 
 type PointSelection = { lat: number; lng: number; name: string } | null;
 
