@@ -764,17 +764,24 @@ const DriverDashboard = () => {
                     const routeDestination = routeObj ? { lat: routeObj.destination_lat, lng: routeObj.destination_lng } : { lat: 30.06, lng: 31.25 };
                     const optimizedWaypoints = isExpanded ? optimizePassengerOrder(activeBookings, routeOrigin, routeDestination) : [];
 
-                    // Build map markers from optimized order
+                    // Build map markers: blue for route start/end, orange for pickups, purple for dropoffs
+                    const validWaypoints = optimizedWaypoints.filter(wp => wp?.coords);
                     const mapMarkers = isExpanded ? [
-                      { lat: routeOrigin.lat, lng: routeOrigin.lng, label: lang === 'ar' ? 'أ' : 'A', color: 'green' as const },
-                      ...optimizedWaypoints.filter(wp => wp?.coords).map((wp, i) => ({
+                      { lat: routeOrigin.lat, lng: routeOrigin.lng, label: lang === 'ar' ? 'أ' : 'A', color: 'blue' as const },
+                      ...validWaypoints.map((wp, i) => ({
                         lat: wp.coords.lat,
                         lng: wp.coords.lng,
                         label: `${i + 1}`,
-                        color: wp.type === 'pickup' ? ('green' as const) : ('red' as const),
+                        color: wp.type === 'pickup' ? ('orange' as const) : ('purple' as const),
                       })),
-                      { lat: routeDestination.lat, lng: routeDestination.lng, label: lang === 'ar' ? 'ب' : 'B', color: 'red' as const },
+                      { lat: routeDestination.lat, lng: routeDestination.lng, label: lang === 'ar' ? 'ب' : 'B', color: 'blue' as const },
                     ] : [];
+
+                    // Build waypoints for directions line to pass through ALL stops
+                    const directionWaypoints = isExpanded ? validWaypoints.map(wp => ({
+                      lat: wp.coords.lat,
+                      lng: wp.coords.lng,
+                    })) : [];
 
                     return (
                       <div key={key} className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -811,13 +818,19 @@ const DriverDashboard = () => {
                                 {lang === 'ar' ? 'خريطة الرحلة المُحسّنة' : 'Optimized Trip Map'}
                               </h4>
                               <p className="text-xs text-muted-foreground mb-2">
-                                {lang === 'ar' ? 'الترتيب الأفضل لتوفير الوقت والوقود' : 'Best order to save time and fuel'}
+                                {lang === 'ar' ? 'الخط الأزرق يمر بكل نقاط الصعود والنزول بالترتيب الأمثل' : 'Blue line passes through all pickups & dropoffs in optimal order'}
                               </p>
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground mb-2">
+                                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block" /> {lang === 'ar' ? 'بداية/نهاية' : 'Start/End'}</span>
+                                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-orange-500 inline-block" /> {lang === 'ar' ? 'صعود' : 'Pickup'}</span>
+                                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-500 inline-block" /> {lang === 'ar' ? 'نزول' : 'Dropoff'}</span>
+                              </div>
                               <MapView
                                 className="h-72 sm:h-96"
                                 markers={mapMarkers}
                                 origin={routeOrigin}
                                 destination={routeDestination}
+                                waypoints={directionWaypoints}
                                 showDirections={true}
                                 showUserLocation={false}
                                 zoom={11}
@@ -833,27 +846,27 @@ const DriverDashboard = () => {
                                 </h4>
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2 text-sm">
-                                    <span className="w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">A</span>
+                                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">A</span>
                                     <span className="text-foreground font-medium">
                                       {lang === 'ar' ? routeObj?.origin_name_ar : routeObj?.origin_name_en}
                                     </span>
                                     <span className="text-xs text-muted-foreground">({lang === 'ar' ? 'نقطة البداية' : 'Start'})</span>
                                   </div>
-                                  {optimizedWaypoints.map((wp, i) => (
+                                  {optimizedWaypoints.filter(wp => wp?.coords).map((wp, i) => (
                                     <div key={i} className="flex items-center gap-2 text-sm ps-2 border-s-2 border-muted ms-3">
                                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                                        wp.type === 'pickup' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                        wp.type === 'pickup' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'
                                       }`}>{i + 1}</span>
                                       <span className="text-foreground">{wp.label}</span>
                                       <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                        wp.type === 'pickup' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
+                                        wp.type === 'pickup' ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'
                                       }`}>
                                         {wp.type === 'pickup' ? (lang === 'ar' ? 'صعود' : 'Pickup') : (lang === 'ar' ? 'نزول' : 'Dropoff')}
                                       </span>
                                     </div>
                                   ))}
                                   <div className="flex items-center gap-2 text-sm">
-                                    <span className="w-6 h-6 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">B</span>
+                                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">B</span>
                                     <span className="text-foreground font-medium">
                                       {lang === 'ar' ? routeObj?.destination_name_ar : routeObj?.destination_name_en}
                                     </span>

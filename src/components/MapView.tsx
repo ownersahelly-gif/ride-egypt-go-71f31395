@@ -10,9 +10,10 @@ const cairoCenter = { lat: 30.0444, lng: 31.2357 };
 const libraries: ('places')[] = ['places'];
 
 interface MapViewProps {
-  markers?: { lat: number; lng: number; label?: string; color?: 'red' | 'green' | 'blue' }[];
+  markers?: { lat: number; lng: number; label?: string; color?: 'red' | 'green' | 'blue' | 'orange' | 'purple' }[];
   origin?: { lat: number; lng: number };
   destination?: { lat: number; lng: number };
+  waypoints?: { lat: number; lng: number }[];
   showDirections?: boolean;
   center?: { lat: number; lng: number };
   zoom?: number;
@@ -25,6 +26,7 @@ const MapView = ({
   markers = [],
   origin,
   destination,
+  waypoints = [],
   showDirections = false,
   center,
   zoom = 12,
@@ -44,17 +46,7 @@ const MapView = ({
 
   const onLoad = useCallback((map: google.maps.Map) => {
     setMapRef(map);
-    if (showDirections && origin && destination) {
-      const directionsService = new google.maps.DirectionsService();
-      directionsService.route({
-        origin,
-        destination,
-        travelMode: google.maps.TravelMode.DRIVING,
-      }, (result, status) => {
-        if (status === 'OK' && result) setDirections(result);
-      });
-    }
-  }, [origin, destination, showDirections]);
+  }, []);
 
   useEffect(() => {
     if (!isLoaded || !showDirections || !origin || !destination) {
@@ -62,14 +54,20 @@ const MapView = ({
       return;
     }
     const directionsService = new google.maps.DirectionsService();
+    const waypointsList = waypoints.map(wp => ({
+      location: new google.maps.LatLng(wp.lat, wp.lng),
+      stopover: true,
+    }));
     directionsService.route({
       origin,
       destination,
+      waypoints: waypointsList.length > 0 ? waypointsList : undefined,
+      optimizeWaypoints: true,
       travelMode: google.maps.TravelMode.DRIVING,
     }, (result, status) => {
       if (status === 'OK' && result) setDirections(result);
     });
-  }, [isLoaded, origin?.lat, origin?.lng, destination?.lat, destination?.lng, showDirections]);
+  }, [isLoaded, origin?.lat, origin?.lng, destination?.lat, destination?.lng, showDirections, JSON.stringify(waypoints)]);
 
   const locateUser = () => {
     if (!navigator.geolocation) return;
@@ -131,19 +129,35 @@ const MapView = ({
           gestureHandling: 'greedy',
         }}
       >
-        {markers.map((marker, i) => (
-          <Marker
-            key={i}
-            position={{ lat: marker.lat, lng: marker.lng }}
-            label={marker.label}
-            icon={marker.color === 'blue' ? {
-              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#3B82F6" stroke="white" stroke-width="3"/><text x="20" y="26" text-anchor="middle" fill="white" font-size="18">🚐</text></svg>'
-              ),
-              scaledSize: new google.maps.Size(40, 40),
-            } : undefined}
-          />
-        ))}
+        {markers.map((marker, i) => {
+          const colorMap: Record<string, string> = {
+            red: '#EF4444',
+            green: '#22C55E',
+            blue: '#3B82F6',
+            orange: '#F97316',
+            purple: '#8B5CF6',
+          };
+          const fill = colorMap[marker.color || 'red'] || '#EF4444';
+          const isShuttle = marker.color === 'blue';
+
+          return (
+            <Marker
+              key={i}
+              position={{ lat: marker.lat, lng: marker.lng }}
+              label={!isShuttle && marker.label ? { text: marker.label, color: 'white', fontWeight: 'bold', fontSize: '11px' } : undefined}
+              icon={{
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+                  isShuttle
+                    ? `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="${fill}" stroke="white" stroke-width="3"/><text x="20" y="26" text-anchor="middle" fill="white" font-size="18">🚐</text></svg>`
+                    : `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42"><path d="M16 0C7.2 0 0 7.2 0 16c0 12 16 26 16 26s16-14 16-26C32 7.2 24.8 0 16 0z" fill="${fill}" stroke="white" stroke-width="2"/><circle cx="16" cy="16" r="10" fill="white" opacity="0.3"/></svg>`
+                ),
+                scaledSize: isShuttle ? new google.maps.Size(40, 40) : new google.maps.Size(28, 36),
+                anchor: isShuttle ? undefined : new google.maps.Point(14, 36),
+                labelOrigin: isShuttle ? undefined : new google.maps.Point(16, 16),
+              }}
+            />
+          );
+        })}
         {userLocation && (
           <Marker
             position={userLocation}
