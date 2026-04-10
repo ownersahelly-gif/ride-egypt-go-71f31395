@@ -183,6 +183,7 @@ const DriverDashboard = () => {
     setSelectedRouteForSchedule(routeObj);
     setScheduleForm(prev => ({ ...prev, route_id: routeObj.id }));
     setShowScheduleForm(true);
+    setTimeout(() => scheduleFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
 
   const saveSchedule = async () => {
