@@ -264,52 +264,60 @@ const Dashboard = () => {
     const { nearest } = findNearestRoutePoint(point);
     setNearestRoutePoint(nearest);
 
-    // Use Google Directions API to get actual driving distance from nearest route point to the selected point
-    // We double it because the driver must go to the person AND come back to the route (round-trip)
-    let oneWayKm: number;
+    // Use Google Directions API for the real car path both ways:
+    // route point -> user point, then user point -> same route point.
+    let toUserKm: number;
+    let backToRouteKm: number;
     if (nearest && typeof google !== 'undefined') {
       try {
         const directionsService = new google.maps.DirectionsService();
-        const result = await new Promise<google.maps.DirectionsResult | null>((resolve) => {
-          directionsService.route({
-            origin: nearest,
-            destination: point,
-            travelMode: google.maps.TravelMode.DRIVING,
-          }, (res, status) => {
-            resolve(status === 'OK' ? res : null);
+        const getDrivingDistanceKm = (origin: { lat: number; lng: number }, destination: { lat: number; lng: number }) =>
+          new Promise<number>((resolve) => {
+            directionsService.route({
+              origin,
+              destination,
+              travelMode: google.maps.TravelMode.DRIVING,
+            }, (res, status) => {
+              if (status === 'OK' && res?.routes?.[0]?.legs?.[0]) {
+                resolve((res.routes[0].legs[0].distance?.value || 0) / 1000);
+              } else {
+                resolve(haversineDistanceKm(origin, destination));
+              }
+            });
           });
-        });
-        if (result?.routes?.[0]?.legs?.[0]) {
-          oneWayKm = (result.routes[0].legs[0].distance?.value || 0) / 1000;
-        } else {
-          oneWayKm = haversineDistanceKm(point, nearest);
-        }
+
+        [toUserKm, backToRouteKm] = await Promise.all([
+          getDrivingDistanceKm(nearest, point),
+          getDrivingDistanceKm(point, nearest),
+        ]);
       } catch {
-        oneWayKm = haversineDistanceKm(point, nearest);
+        toUserKm = haversineDistanceKm(point, nearest);
+        backToRouteKm = toUserKm;
       }
     } else {
-      oneWayKm = nearest ? haversineDistanceKm(point, nearest) : 999;
+      toUserKm = nearest ? haversineDistanceKm(point, nearest) : 999;
+      backToRouteKm = toUserKm;
     }
 
-    const roundTripKm = oneWayKm * 2; // detour = go to person + return to route
+    const roundTripKm = toUserKm + backToRouteKm;
     const ok = roundTripKm <= MAX_DISTANCE_KM;
-    const onRoute = oneWayKm <= 0.1;
+    const onRoute = roundTripKm <= 0.1;
     setResult({ ok, minutes: Math.round(roundTripKm * 10) / 10, onRoute });
 
     if (!ok) {
       toast({
         title: lang === 'ar' ? 'موقع بعيد عن المسار' : 'Too far from route',
         description: lang === 'ar'
-          ? `الانحراف ذهاباً وإياباً ${roundTripKm.toFixed(1)} كم (الحد الأقصى ${MAX_DISTANCE_KM} كم)`
-          : `Round-trip detour is ${roundTripKm.toFixed(1)} km (max ${MAX_DISTANCE_KM} km)`,
+          ? `الذهاب للموقع والرجوع للمسار = ${roundTripKm.toFixed(1)} كم (الحد الأقصى ${MAX_DISTANCE_KM} كم)`
+          : `Driving to the point and back to the route is ${roundTripKm.toFixed(1)} km (max ${MAX_DISTANCE_KM} km)`,
         variant: 'destructive',
       });
     } else {
       toast({
         title: lang === 'ar' ? '✅ موقع مقبول' : '✅ Location accepted',
         description: lang === 'ar'
-          ? `الانحراف ذهاباً وإياباً ${roundTripKm.toFixed(1)} كم`
-          : `Round-trip detour: ${roundTripKm.toFixed(1)} km`,
+          ? `الذهاب للموقع والرجوع للمسار = ${roundTripKm.toFixed(1)} كم`
+          : `Drive-to-point + return-to-route: ${roundTripKm.toFixed(1)} km`,
       });
     }
     setValidating(false);
@@ -615,8 +623,8 @@ const Dashboard = () => {
                   <span className="font-medium block truncate">{customPoint.name}</span>
                   <span className="text-[10px] opacity-75">
                     {result.ok
-                      ? (lang === 'ar' ? `${result.minutes} كم من المسار ✓` : `${result.minutes} km from route ✓`)
-                      : (lang === 'ar' ? `${result.minutes} كم من المسار (الحد ${MAX_DISTANCE_KM} كم)` : `${result.minutes} km from route (max ${MAX_DISTANCE_KM} km)`)}
+                      ? (lang === 'ar' ? `${result.minutes} كم ذهاباً وعودة ✓` : `${result.minutes} km round trip ✓`)
+                      : (lang === 'ar' ? `${result.minutes} كم ذهاباً وعودة (الحد ${MAX_DISTANCE_KM} كم)` : `${result.minutes} km round trip (max ${MAX_DISTANCE_KM} km)`)}
                   </span>
                 </div>
               </div>
