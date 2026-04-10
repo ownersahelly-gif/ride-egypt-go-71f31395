@@ -925,6 +925,73 @@ const AdminPanel = () => {
                 <p className="text-sm text-muted-foreground">{lang === 'ar' ? 'لا توجد باقات بعد' : 'No bundles yet'}</p>
               )}
             </div>
+
+            {/* Test Trip Launcher */}
+            <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <Car className="w-5 h-5 text-primary" />
+                {lang === 'ar' ? 'بدء رحلة تجريبية' : 'Start Test Trip'}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {lang === 'ar'
+                  ? 'يحدث حجز مؤكد إلى اليوم ويشغل موقع GPS للشاتل للاختبار المباشر'
+                  : 'Moves a confirmed booking to today and sets shuttle GPS for live testing'}
+              </p>
+              <Button
+                onClick={async () => {
+                  try {
+                    // Find a confirmed or pending booking
+                    const { data: testBooking } = await supabase
+                      .from('bookings')
+                      .select('*, shuttles(*), routes(*)')
+                      .in('status', ['confirmed', 'pending'])
+                      .order('created_at', { ascending: false })
+                      .limit(1)
+                      .single();
+
+                    if (!testBooking) {
+                      toast.error(lang === 'ar' ? 'لا يوجد حجز للتجربة' : 'No booking found to test');
+                      return;
+                    }
+
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const route = testBooking.routes;
+                    const shuttleId = testBooking.shuttle_id;
+
+                    // Update booking to today + confirmed
+                    await supabase.from('bookings').update({
+                      scheduled_date: todayStr,
+                      status: 'confirmed',
+                    }).eq('id', testBooking.id);
+
+                    // Update or create ride instances for today
+                    await supabase.from('ride_instances').update({
+                      ride_date: todayStr,
+                    }).eq('shuttle_id', shuttleId).eq('route_id', testBooking.route_id);
+
+                    // Set shuttle GPS to route origin (simulating driver at start)
+                    if (route) {
+                      await supabase.from('shuttles').update({
+                        current_lat: route.origin_lat,
+                        current_lng: route.origin_lng,
+                        status: 'active',
+                      }).eq('id', shuttleId);
+                    }
+
+                    toast.success(lang === 'ar'
+                      ? `تم تفعيل رحلة تجريبية: ${testBooking.id.slice(0, 8)}...`
+                      : `Test trip activated: ${testBooking.id.slice(0, 8)}...`);
+                    fetchAllData();
+                  } catch (err: any) {
+                    toast.error(err.message || 'Failed');
+                  }
+                }}
+                className="w-full"
+              >
+                <Car className="w-4 h-4 me-2" />
+                {lang === 'ar' ? 'تفعيل رحلة تجريبية الآن' : 'Activate Test Trip Now'}
+              </Button>
+            </div>
           </div>
         )}
       </div>
