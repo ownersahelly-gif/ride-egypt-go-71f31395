@@ -572,9 +572,9 @@ const DriverDashboard = () => {
                           if (b.route_id !== slot.routeId || b.status === 'cancelled') return false;
                           const bDow = new Date(b.scheduled_date).getDay();
                           if (bDow !== slot.day) return false;
-                          // Match direction
+                          // Match direction — schedule uses 'go'/'back', bookings use 'go'/'return'/'both'
                           if (slot.direction === 'go') return b.trip_direction === 'go' || b.trip_direction === 'both';
-                          return b.trip_direction === 'return' || b.trip_direction === 'both';
+                          return b.trip_direction === 'return' || b.trip_direction === 'back' || b.trip_direction === 'both';
                         });
 
                         const isToday = slot.dayOffset === 0;
