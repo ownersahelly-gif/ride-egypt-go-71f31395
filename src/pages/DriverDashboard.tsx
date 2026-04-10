@@ -468,6 +468,20 @@ const DriverDashboard = () => {
                               <p className="text-xs text-muted-foreground">{routeInfo?.price} EGP/{lang === 'ar' ? 'مقعد' : 'seat'}</p>
                             </div>
                           </div>
+                          {routeInfo?.origin_lat && routeInfo?.destination_lat && (
+                            <MapView
+                              className="h-[180px] mb-3"
+                              markers={[
+                                { lat: routeInfo.origin_lat, lng: routeInfo.origin_lng, label: 'A', color: 'green' },
+                                { lat: routeInfo.destination_lat, lng: routeInfo.destination_lng, label: 'B', color: 'red' },
+                              ]}
+                              origin={{ lat: routeInfo.origin_lat, lng: routeInfo.origin_lng }}
+                              destination={{ lat: routeInfo.destination_lat, lng: routeInfo.destination_lng }}
+                              showDirections
+                              showUserLocation={false}
+                              zoom={10}
+                            />
+                          )}
                           <div className="space-y-1.5">
                             {(schedules as any[]).sort((a: any, b: any) => a.day_of_week - b.day_of_week).map((s: any) => (
                               <div key={s.id} className="flex items-center justify-between bg-surface rounded-lg px-3 py-2">
