@@ -233,8 +233,8 @@ const BookRide = () => {
       const destAr = route.destination_name_ar || '';
       // For "go" rides, pickup = origin; for "return" rides, pickup = destination
       const matchesPickup = ri.direction === 'return'
-        ? (destEn.includes(q) || destAr.includes(q))
-        : (originEn.includes(q) || originAr.includes(q));
+        ? (destEn.startsWith(q) || destAr.startsWith(q))
+        : (originEn.startsWith(q) || originAr.startsWith(q));
       if (!matchesPickup) return false;
     }
 
@@ -247,8 +247,8 @@ const BookRide = () => {
       const destAr = route.destination_name_ar || '';
       // For "go" rides, dropoff = destination; for "return" rides, dropoff = origin
       const matchesDropoff = ri.direction === 'return'
-        ? (originEn.includes(q) || originAr.includes(q))
-        : (destEn.includes(q) || destAr.includes(q));
+        ? (originEn.startsWith(q) || originAr.startsWith(q))
+        : (destEn.startsWith(q) || destAr.startsWith(q));
       if (!matchesDropoff) return false;
     }
 
