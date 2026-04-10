@@ -252,7 +252,8 @@ const TrackShuttle = () => {
         }
       });
     } else {
-      // Trip hasn't started — use Google Directions from route origin to user pickup for accurate drive time
+      // Trip hasn't started — driver departs from route origin at scheduled time sharp
+      // ETA = Google driving time from origin → (stops before you) → your pickup + 1 min per stop
       const routeOrigin = { lat: route.origin_lat, lng: route.origin_lng };
       const waypoints = stopsBeforeMe.map(s => ({
         location: new google.maps.LatLng(s.lat, s.lng),
@@ -268,9 +269,9 @@ const TrackShuttle = () => {
         if (status === 'OK' && result) {
           let driveSeconds = 0;
           result.routes[0]?.legs?.forEach(leg => { driveSeconds += leg.duration?.value ?? 0; });
+          // Add 1 min wait per intermediate stop
           driveSeconds += stopsBeforeMe.length * 60;
-          const minutesUntilDeparture = Math.max(0, Math.ceil(msUntilDeparture / 60000));
-          setEtaMinutes(minutesUntilDeparture + Math.ceil(driveSeconds / 60));
+          setEtaMinutes(Math.ceil(driveSeconds / 60));
         }
       });
     }
