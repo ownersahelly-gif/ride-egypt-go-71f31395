@@ -189,7 +189,20 @@ const BookRide = () => {
     setDropoffResult(null);
     setPickupMode('start');
     setDropoffMode('end');
+    setUseBundle(false);
     setStep('details');
+
+    if (user && ride.route_id) {
+      // Fetch saved locations, bundles, and active bundle purchases in parallel
+      const [{ data: savedLocs }, { data: bundles }, { data: purchases }] = await Promise.all([
+        supabase.from('saved_locations').select('*').eq('user_id', user.id).eq('route_id', ride.route_id).order('use_count', { ascending: false }).limit(5),
+        supabase.from('ride_bundles').select('*').eq('route_id', ride.route_id).eq('is_active', true),
+        supabase.from('bundle_purchases').select('*').eq('user_id', user.id).eq('route_id', ride.route_id).eq('status', 'active').gt('rides_remaining', 0).gt('expires_at', new Date().toISOString()).limit(1),
+      ]);
+      setSavedLocations(savedLocs || []);
+      setAvailableBundles(bundles || []);
+      setActiveBundlePurchase(purchases?.[0] || null);
+    }
   };
 
   const filteredRides = rideInstances.filter((ri) => {
