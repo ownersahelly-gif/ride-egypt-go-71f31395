@@ -855,9 +855,10 @@ const DriverDashboard = () => {
                                 {lang === 'ar' ? 'الخط الأزرق يمر بكل نقاط الصعود والنزول بالترتيب الأمثل' : 'Blue line passes through all pickups & dropoffs in optimal order'}
                               </p>
                               <div className="flex items-center gap-4 text-xs text-muted-foreground mb-2">
-                                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block" /> {lang === 'ar' ? 'بداية/نهاية' : 'Start/End'}</span>
+                                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" /> {lang === 'ar' ? 'بداية' : 'Start'}</span>
                                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-orange-500 inline-block" /> {lang === 'ar' ? 'صعود' : 'Pickup'}</span>
                                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-500 inline-block" /> {lang === 'ar' ? 'نزول' : 'Dropoff'}</span>
+                                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> {lang === 'ar' ? 'نهاية' : 'End'}</span>
                               </div>
                               <MapView
                                 className="h-72 sm:h-96"
