@@ -240,6 +240,23 @@ const MyBookings = () => {
                     </div>
                   )}
 
+                  {/* Skipped notification */}
+                  {booking.skipped_at && (
+                    <div className="bg-destructive/10 rounded-lg p-3 mb-3 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-destructive">
+                          {lang === 'ar' ? 'تم تخطيك — لم تحضر في الوقت' : 'Skipped — No show at pickup'}
+                        </p>
+                        {booking.skip_refund_amount > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {lang === 'ar' ? `سيتم استرداد ${booking.skip_refund_amount} جنيه (50%)` : `${booking.skip_refund_amount} EGP (50%) will be refunded`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Rating prompt for completed rides */}
                   {booking.status === 'completed' && !ratedBookingIds.has(booking.id) && (
                     <div className="bg-secondary/10 rounded-lg p-3 mb-3 flex items-center justify-between">
