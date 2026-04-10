@@ -846,27 +846,27 @@ const DriverDashboard = () => {
                                 </h4>
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2 text-sm">
-                                    <span className="w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">A</span>
+                                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">A</span>
                                     <span className="text-foreground font-medium">
                                       {lang === 'ar' ? routeObj?.origin_name_ar : routeObj?.origin_name_en}
                                     </span>
                                     <span className="text-xs text-muted-foreground">({lang === 'ar' ? 'نقطة البداية' : 'Start'})</span>
                                   </div>
-                                  {optimizedWaypoints.map((wp, i) => (
+                                  {optimizedWaypoints.filter(wp => wp?.coords).map((wp, i) => (
                                     <div key={i} className="flex items-center gap-2 text-sm ps-2 border-s-2 border-muted ms-3">
                                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                                        wp.type === 'pickup' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                        wp.type === 'pickup' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'
                                       }`}>{i + 1}</span>
                                       <span className="text-foreground">{wp.label}</span>
                                       <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                        wp.type === 'pickup' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
+                                        wp.type === 'pickup' ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'
                                       }`}>
                                         {wp.type === 'pickup' ? (lang === 'ar' ? 'صعود' : 'Pickup') : (lang === 'ar' ? 'نزول' : 'Dropoff')}
                                       </span>
                                     </div>
                                   ))}
                                   <div className="flex items-center gap-2 text-sm">
-                                    <span className="w-6 h-6 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">B</span>
+                                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">B</span>
                                     <span className="text-foreground font-medium">
                                       {lang === 'ar' ? routeObj?.destination_name_ar : routeObj?.destination_name_en}
                                     </span>
