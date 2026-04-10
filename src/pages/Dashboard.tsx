@@ -556,7 +556,7 @@ const Dashboard = () => {
   ) => {
     const isPickupType = type === 'pickup';
     const startLabel = isPickupType ? (lang === 'ar' ? '🚏 نقطة الانطلاق' : '🚏 Starting Point') : (lang === 'ar' ? '🏁 نقطة الوصول' : '🏁 End Point');
-    const nearbyLabel = lang === 'ar' ? '🗺️ موقع قريب (≤5 د)' : '🗺️ Nearby (≤5 min)';
+    const nearbyLabel = lang === 'ar' ? '📍 اختر من الخريطة' : '📍 Pick on map';
     const isStartMode = mode === 'start' || mode === 'end';
 
     return (
@@ -611,9 +611,41 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col relative">
-      {/* Full-screen map background */}
-      <div className="absolute inset-0 z-0">
+    <div className="h-screen flex flex-col">
+      {/* Top bar */}
+      <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0 z-10">
+        <div className="flex items-center gap-2">
+          {step !== 'search' && (
+            <Button variant="ghost" size="icon" className="rounded-full" onClick={() => {
+              if (step === 'details') { setStep('results'); setSelectedRide(null); setRouteDirections(null); }
+              else { setStep('search'); setRideInstances([]); }
+            }}>
+              <Back className="w-5 h-5" />
+            </Button>
+          )}
+          <Link to="/" className="text-xl font-bold text-primary font-arabic">
+            {lang === 'ar' ? 'مسار' : 'Massar'}
+          </Link>
+        </div>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Link to="/admin">
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <Shield className="w-4 h-4" />
+              </Button>
+            </Link>
+          )}
+          <button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} className="rounded-full p-2 hover:bg-muted transition-colors">
+            <Globe className="w-4 h-4" />
+          </button>
+          <Button variant="ghost" size="icon" className="rounded-full" onClick={handleSignOut}>
+            <LogOut className="w-4 h-4" />
+          </Button>
+        </div>
+      </header>
+
+      {/* Map section - fills remaining space above card */}
+      <div className="flex-1 min-h-0 relative">
         <MapView
           className="h-full w-full rounded-none"
           markers={mapMarkers}
@@ -621,47 +653,24 @@ const Dashboard = () => {
           destination={step === 'details' && selectedRide?.routes ? { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng } : (pickup && dropoff ? dropoff : undefined)}
           showDirections={step === 'details' ? !!selectedRide?.routes : (!!pickup && !!dropoff)}
           zoom={12}
-          showUserLocation={step === 'search'}
+          showUserLocation
           onMapClick={step === 'details' && isNearbyMode ? handleMapClick : undefined}
         />
+        {/* Tap-on-map hint when nearby mode is active */}
+        {step === 'details' && isNearbyMode && (
+          <div className="absolute top-3 inset-x-0 flex justify-center z-10 pointer-events-none">
+            <div className="bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-lg text-xs font-medium flex items-center gap-2 animate-pulse">
+              <Navigation className="w-3.5 h-3.5" />
+              {lang === 'ar' ? 'اضغط على الخريطة لاختيار الموقع' : 'Tap on the map to pick a location'}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Top bar */}
-      <header className="relative z-10 flex items-center justify-between px-4 pt-3">
-        <div className="flex items-center gap-2">
-          {step !== 'search' && (
-            <Button variant="secondary" size="icon" className="rounded-full shadow-lg bg-card/90 backdrop-blur-sm" onClick={() => {
-              if (step === 'details') { setStep('results'); setSelectedRide(null); setRouteDirections(null); }
-              else { setStep('search'); setRideInstances([]); }
-            }}>
-              <Back className="w-5 h-5" />
-            </Button>
-          )}
-          <Link to="/" className="text-xl font-bold text-primary bg-card/90 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg font-arabic">
-            {lang === 'ar' ? 'مسار' : 'Massar'}
-          </Link>
-        </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <Link to="/admin">
-              <Button variant="secondary" size="icon" className="rounded-full shadow-lg bg-card/90 backdrop-blur-sm">
-                <Shield className="w-4 h-4" />
-              </Button>
-            </Link>
-          )}
-          <button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} className="rounded-full shadow-lg bg-card/90 backdrop-blur-sm p-2">
-            <Globe className="w-4 h-4" />
-          </button>
-          <Button variant="secondary" size="icon" className="rounded-full shadow-lg bg-card/90 backdrop-blur-sm" onClick={handleSignOut}>
-            <LogOut className="w-4 h-4" />
-          </Button>
-        </div>
-      </header>
-
-      {/* Floating booking card */}
-      <div className="relative z-10 mt-auto pb-20 px-4 pointer-events-none">
+      {/* Bottom card - full width */}
+      <div className="shrink-0 max-h-[45vh] overflow-y-auto bg-card border-t border-border pb-16">
         {step === 'search' && (
-          <div className="pointer-events-auto bg-card/95 backdrop-blur-md rounded-3xl shadow-2xl border border-border p-5 space-y-4 max-w-lg mx-auto">
+          <div className="p-4 space-y-4">
             <h2 className="text-lg font-bold text-foreground">
               {lang === 'ar' ? 'إلى أين تريد الذهاب؟' : 'Where are you going?'}
             </h2>
@@ -719,7 +728,7 @@ const Dashboard = () => {
         )}
 
         {step === 'results' && (
-          <div className="pointer-events-auto bg-card/95 backdrop-blur-md rounded-3xl shadow-2xl border border-border p-5 space-y-3 max-w-lg mx-auto max-h-[50vh] overflow-y-auto">
+          <div className="p-4 space-y-3">
             <h2 className="text-lg font-bold text-foreground">
               {lang === 'ar' ? 'الرحلات المتاحة' : 'Available Rides'}
             </h2>
@@ -808,7 +817,7 @@ const Dashboard = () => {
         )}
 
         {step === 'details' && selectedRide && (
-          <div className="pointer-events-auto bg-card/95 backdrop-blur-md rounded-3xl shadow-2xl border border-border p-5 space-y-4 max-w-lg mx-auto max-h-[50vh] overflow-y-auto">
+          <div className="p-4 space-y-4">
             {/* Driver & Vehicle */}
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">

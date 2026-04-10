@@ -48,6 +48,19 @@ const MapView = ({
     setMapRef(map);
   }, []);
 
+  // Auto-locate user on mount
+  useEffect(() => {
+    if (!showUserLocation || userLocation) return;
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, [showUserLocation]);
+
   useEffect(() => {
     if (!isLoaded || !showDirections || !origin || !destination) {
       setDirections(null);
