@@ -749,7 +749,7 @@ const DriverDashboard = () => {
                     </div>
 
                     <div className="flex gap-2">
-                      <Button onClick={saveSchedule} disabled={savingSchedule || !scheduleForm.route_id || scheduleForm.days.length === 0} className="flex-1">
+                      <Button onClick={saveSchedule} disabled={savingSchedule || !scheduleForm.route_id || scheduleForm.days.length === 0 || scheduleForm.timeSlots.length === 0} className="flex-1">
                         {savingSchedule ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : <CheckCircle2 className="w-4 h-4 me-1" />}
                         {lang === 'ar' ? 'حفظ' : 'Save'}
                       </Button>
