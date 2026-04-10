@@ -436,35 +436,58 @@ const BookRide = () => {
         : customDropoff?.name;
 
       const basePrice = dynamicPrice;
-      const totalPrice = usingBundle ? 0 : (tripDirection === 'both' ? basePrice * 2 : basePrice);
+      const singlePrice = usingBundle ? 0 : basePrice;
+      const bookingStatus = asWaitlist ? 'waitlist' : (usingBundle ? 'confirmed' : 'pending');
 
-      const bookingData: any = {
-        user_id: user.id,
-        route_id: selectedRide.route_id,
-        shuttle_id: selectedRide.shuttle_id,
-        seats: 1,
-        total_price: totalPrice,
-        scheduled_date: selectedRide.ride_date,
-        scheduled_time: selectedRide.departure_time,
-        status: asWaitlist ? 'waitlist' : (usingBundle ? 'confirmed' : 'pending'),
-        payment_proof_url: proofUrl,
-        waitlist_position: waitlistPos,
-        custom_pickup_lat: pickupLat,
-        custom_pickup_lng: pickupLng,
-        custom_pickup_name: pickupName,
-        custom_dropoff_lat: dropoffLat,
-        custom_dropoff_lng: dropoffLng,
-        custom_dropoff_name: dropoffName,
-        trip_direction: tripDirection,
-      };
+      // For round trips ("both"), create TWO separate bookings
+      const directions: ('go' | 'return')[] = tripDirection === 'both' ? ['go', 'return'] : [tripDirection as 'go' | 'return'];
 
-      const { error } = await supabase.from('bookings').insert(bookingData);
+      // Find the return ride instance for this route+date if booking round trip
+      let returnRideInstance: any = null;
+      if (tripDirection === 'both') {
+        const { data: returnRides } = await supabase
+          .from('ride_instances')
+          .select('*')
+          .eq('route_id', selectedRide.route_id)
+          .eq('ride_date', selectedRide.ride_date)
+          .eq('direction', 'return')
+          .eq('status', 'scheduled')
+          .order('departure_time')
+          .limit(1);
+        returnRideInstance = returnRides?.[0] || null;
+      }
+
+      const bookingsToInsert = directions.map((dir) => {
+        const isReturn = dir === 'return';
+        const rideForDir = isReturn && returnRideInstance ? returnRideInstance : selectedRide;
+        return {
+          user_id: user.id,
+          route_id: selectedRide.route_id,
+          shuttle_id: rideForDir.shuttle_id,
+          seats: 1,
+          total_price: singlePrice,
+          scheduled_date: rideForDir.ride_date,
+          scheduled_time: rideForDir.departure_time,
+          status: bookingStatus,
+          payment_proof_url: proofUrl,
+          waitlist_position: waitlistPos,
+          custom_pickup_lat: isReturn ? dropoffLat : pickupLat,
+          custom_pickup_lng: isReturn ? dropoffLng : pickupLng,
+          custom_pickup_name: isReturn ? dropoffName : pickupName,
+          custom_dropoff_lat: isReturn ? pickupLat : dropoffLat,
+          custom_dropoff_lng: isReturn ? pickupLng : dropoffLng,
+          custom_dropoff_name: isReturn ? pickupName : dropoffName,
+          trip_direction: dir,
+        };
+      });
+
+      const { error } = await supabase.from('bookings').insert(bookingsToInsert);
       if (error) throw error;
 
-      // Deduct from bundle if using one
+      // Deduct from bundle if using one (deduct per ride)
       if (usingBundle && activeBundlePurchase) {
         await supabase.from('bundle_purchases').update({
-          rides_remaining: activeBundlePurchase.rides_remaining - 1,
+          rides_remaining: activeBundlePurchase.rides_remaining - directions.length,
         }).eq('id', activeBundlePurchase.id);
       }
 
@@ -472,6 +495,12 @@ const BookRide = () => {
         await supabase.from('ride_instances').update({
           available_seats: selectedRide.available_seats - 1,
         }).eq('id', selectedRide.id);
+        // Also decrement return ride instance seats
+        if (returnRideInstance) {
+          await supabase.from('ride_instances').update({
+            available_seats: returnRideInstance.available_seats - 1,
+          }).eq('id', returnRideInstance.id);
+        }
       }
 
       // Save location for future use
