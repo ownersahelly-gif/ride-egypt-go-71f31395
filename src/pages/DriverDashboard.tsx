@@ -48,10 +48,16 @@ const DriverDashboard = () => {
   const [showRouteRequest, setShowRouteRequest] = useState(false);
   const [routeRequestForm, setRouteRequestForm] = useState({
     origin_name: '',
+    origin_lat: 0,
+    origin_lng: 0,
     destination_name: '',
-    preferred_time: '08:00',
+    destination_lat: 0,
+    destination_lng: 0,
+    preferred_time_go: '08:00',
+    preferred_time_return: '17:00',
   });
   const [savingRouteRequest, setSavingRouteRequest] = useState(false);
+  const [pickingLocation, setPickingLocation] = useState<'origin' | 'destination' | null>(null);
 
   useDriverBookingNotifications(shuttle?.id || null);
 
