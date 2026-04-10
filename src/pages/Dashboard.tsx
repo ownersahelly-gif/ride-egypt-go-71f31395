@@ -625,11 +625,12 @@ const Dashboard = () => {
       <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0 z-10">
         <div className="flex items-center gap-2">
           {step !== 'search' && (
-            <Button variant="ghost" size="icon" className="rounded-full" onClick={() => {
-              if (step === 'details') { setStep('results'); setSelectedRide(null); setRouteDirections(null); }
+            <Button variant="ghost" size="sm" className="rounded-full gap-1" onClick={() => {
+              if (step === 'details') { setStep('results'); setSelectedRide(null); setRouteDirections(null); setNearestRoutePoint(null); setCustomPickup(null); setCustomDropoff(null); setPickupResult(null); setDropoffResult(null); }
               else { setStep('search'); setRideInstances([]); }
             }}>
               <Back className="w-5 h-5" />
+              <span className="text-sm">{lang === 'ar' ? 'رجوع' : 'Back'}</span>
             </Button>
           )}
           <Link to="/" className="text-xl font-bold text-primary font-arabic">
