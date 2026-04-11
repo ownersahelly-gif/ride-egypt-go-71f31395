@@ -157,20 +157,20 @@ const MapPinPicker = ({ activePin, origin, destination, onConfirm, onCancel, cla
 
       {/* Center pin overlay - always centered on screen */}
       {activePin && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="flex flex-col items-center -mt-10">
-            <svg width="40" height="52" viewBox="0 0 32 42">
-              <path d="M16 0C7.2 0 0 7.2 0 16c0 12 16 26 16 26s16-14 16-26C32 7.2 24.8 0 16 0z" fill={pinColor} stroke="white" strokeWidth="2"/>
-              <circle cx="16" cy="16" r="6" fill="white" opacity="0.9"/>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 9999 }}>
+          <div className="flex flex-col items-center animate-bounce" style={{ marginTop: '-48px' }}>
+            <svg width="56" height="72" viewBox="0 0 32 42" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>
+              <path d="M16 0C7.2 0 0 7.2 0 16c0 12 16 26 16 26s16-14 16-26C32 7.2 24.8 0 16 0z" fill={pinColor} stroke="white" strokeWidth="2.5"/>
+              <circle cx="16" cy="16" r="7" fill="white" opacity="0.95"/>
             </svg>
-            <div className="w-2 h-2 rounded-full bg-black/30 mt-1" />
           </div>
+          <div className="absolute w-3 h-3 rounded-full bg-black/40" style={{ top: '50%', marginTop: '2px' }} />
         </div>
       )}
 
       {/* Instructions banner */}
       {activePin && (
-        <div className="absolute top-3 left-3 right-3 z-10">
+        <div className="absolute top-3 left-3 right-3" style={{ zIndex: 9999 }}>
           <div className="bg-card/95 backdrop-blur-sm border border-border rounded-xl px-4 py-2.5 shadow-lg text-center">
             <p className="text-sm font-medium text-foreground">
               {lang === 'ar'
@@ -183,7 +183,7 @@ const MapPinPicker = ({ activePin, origin, destination, onConfirm, onCancel, cla
 
       {/* Confirm / Cancel buttons */}
       {activePin && (
-        <div className="absolute bottom-4 left-3 right-3 z-10 flex gap-2">
+        <div className="absolute bottom-4 left-3 right-3 flex gap-2" style={{ zIndex: 9999 }}>
           <Button variant="outline" className="flex-1 bg-card/95 backdrop-blur-sm" onClick={onCancel}>
             <X className="w-4 h-4 me-1" />
             {lang === 'ar' ? 'إلغاء' : 'Cancel'}
