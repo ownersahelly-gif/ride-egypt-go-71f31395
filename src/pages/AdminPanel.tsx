@@ -1130,8 +1130,34 @@ const AdminPanel = () => {
                         v.status === 'rejected' ? 'bg-destructive/10 text-destructive' :
                         'bg-secondary/20 text-secondary'
                       }`}>{v.status}</span>
-                    </div>
+            </div>
 
+            {/* Global Stop Waiting Time */}
+            <div className="bg-card border border-border rounded-xl p-6 max-w-lg">
+              <h3 className="font-semibold text-foreground mb-1 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-primary" />
+                {lang === 'ar' ? 'وقت انتظار الباص في المحطة' : 'Bus Waiting Time at Stops'}
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                {lang === 'ar'
+                  ? 'عدد الدقائق التي ينتظرها الباص في كل محطة (ينطبق على جميع المسارات)'
+                  : 'How many minutes the bus waits at each stop (applies to all routes globally)'}
+              </p>
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="number"
+                  min="1"
+                  max="30"
+                  value={globalWaitingTime}
+                  onChange={(e) => setGlobalWaitingTime(e.target.value)}
+                  className="w-24 font-mono"
+                />
+                <span className="text-sm text-muted-foreground">{lang === 'ar' ? 'دقائق' : 'minutes'}</span>
+                <Button onClick={saveGlobalWaitingTime} disabled={savingWaitingTime}>
+                  {savingWaitingTime ? <Loader2 className="w-4 h-4 animate-spin" /> : (lang === 'ar' ? 'حفظ' : 'Save')}
+                </Button>
+              </div>
+            </div>
                     <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
                       <div><span className="text-muted-foreground">{lang === 'ar' ? 'اللوحة:' : 'Plate:'}</span> <span className="font-medium">{v.license_plate}</span></div>
                       <div><span className="text-muted-foreground">{lang === 'ar' ? 'السيارة:' : 'Vehicle:'}</span> <span className="font-medium">{v.vehicle_model}</span></div>
