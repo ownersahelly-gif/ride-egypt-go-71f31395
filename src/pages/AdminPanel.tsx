@@ -276,7 +276,7 @@ const AdminPanel = () => {
         lat: stopForm.lat,
         lng: stopForm.lng,
         stop_type: stopForm.stop_type,
-        stop_order: stopForm.stop_order,
+        // keep existing stop_order when editing
         arrival_time: stopForm.arrival_time || null,
       }).eq('id', editingStopId);
       if (error) toast.error(error.message);
@@ -294,7 +294,7 @@ const AdminPanel = () => {
         lat: stopForm.lat,
         lng: stopForm.lng,
         stop_type: stopForm.stop_type,
-        stop_order: stopForm.stop_order,
+        stop_order: routeStopsMap[routeId]?.length || 0,
         arrival_time: stopForm.arrival_time || null,
       });
       if (error) toast.error(error.message);
@@ -825,10 +825,6 @@ const AdminPanel = () => {
                             <option value="pickup">🟢 Pickup only</option>
                             <option value="dropoff">🔴 Dropoff only</option>
                           </select>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">{lang === 'ar' ? 'الترتيب' : 'Order'}</Label>
-                          <Input type="number" value={stopForm.stop_order} onChange={e => setStopForm(p => ({ ...p, stop_order: parseInt(e.target.value) || 0 }))} className="h-9 text-sm" />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> {lang === 'ar' ? 'وقت الوصول' : 'Arrival Time'}</Label>
