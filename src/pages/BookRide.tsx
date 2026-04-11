@@ -1032,6 +1032,7 @@ const BookRide = () => {
                     markers={mapMarkers}
                     origin={selectedRide.routes ? { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng } : undefined}
                     destination={selectedRide.routes ? { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng } : undefined}
+                    waypoints={routeStops.map((s: any) => ({ lat: s.lat, lng: s.lng }))}
                     showDirections={!!selectedRide.routes}
                     zoom={12}
                     showUserLocation={false}
