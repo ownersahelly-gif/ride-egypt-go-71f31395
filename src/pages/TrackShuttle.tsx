@@ -292,9 +292,31 @@ const TrackShuttle = () => {
     }
   }, [shuttle?.current_lat, shuttle?.current_lng, booking, route, passengerStops]);
 
-  // Supabase Realtime subscription for live shuttle location
+  // Instant live location via Supabase Broadcast (no DB round-trip)
   useEffect(() => {
     if (!shuttle?.id) return;
+    // Stop tracking if passenger is already boarded
+    if (booking?.status === 'boarded') return;
+
+    const channel = supabase
+      .channel(`shuttle-live-${shuttle.id}`)
+      .on('broadcast', { event: 'driver-location' }, (payload) => {
+        const { lat, lng } = payload.payload;
+        if (lat && lng) {
+          setShuttle((prev: any) => ({ ...prev, current_lat: lat, current_lng: lng, status: 'active' }));
+          setIsLive(true);
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [shuttle?.id, booking?.status]);
+
+  // Fallback: postgres_changes + polling for when broadcast misses
+  useEffect(() => {
+    if (!shuttle?.id) return;
+    if (booking?.status === 'boarded') return;
+
     const channel = supabase
       .channel(`shuttle-track-${shuttle.id}`)
       .on('postgres_changes', {
@@ -305,14 +327,9 @@ const TrackShuttle = () => {
       }, (payload) => {
         setShuttle((prev: any) => ({ ...prev, ...payload.new }));
       })
-      .subscribe((status) => setIsLive(status === 'SUBSCRIBED'));
+      .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [shuttle?.id]);
-
-  // Polling fallback every 10s
-  useEffect(() => {
-    if (!shuttle?.id) return;
+    // Polling fallback every 15s
     const interval = setInterval(async () => {
       const { data } = await supabase
         .from('shuttles')
@@ -320,9 +337,13 @@ const TrackShuttle = () => {
         .eq('id', shuttle.id)
         .single();
       if (data) setShuttle((prev: any) => ({ ...prev, ...data }));
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [shuttle?.id]);
+    }, 15000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, [shuttle?.id, booking?.status]);
 
   // Determine if trip has started based on shuttle status (driver sets it to 'active' when starting)
   const shuttleIsActive = shuttle?.status === 'active';

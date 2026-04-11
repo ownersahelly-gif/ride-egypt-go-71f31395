@@ -258,18 +258,36 @@ const ActiveRide = () => {
     setActiveStops(stops);
   }, [route, routeStops, bookings, profiles, lang, findNearestStop]);
 
-  // Update driver location & push to DB
+  // Update driver location: Broadcast for instant passenger updates + DB writes for persistence
   useEffect(() => {
     if (!shuttle?.id || !navigator.geolocation) return;
 
     let lastDbUpdate = 0;
-    const DB_THROTTLE_MS = 3000; // throttle DB writes to every 3s
+    const DB_THROTTLE_MS = 5000; // DB writes every 5s for persistence
+    const BROADCAST_THROTTLE_MS = 1000; // broadcast every 1s for instant tracking
+    let lastBroadcast = 0;
+
+    // Create a broadcast channel for instant location sharing
+    const broadcastChannel = supabase.channel(`shuttle-live-${shuttle.id}`);
+    broadcastChannel.subscribe();
 
     const updateLocation = (pos: GeolocationPosition) => {
       const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setDriverLocation(loc);
 
       const now = Date.now();
+
+      // Broadcast instantly (throttled to 1s) — passengers receive this in real-time
+      if (now - lastBroadcast >= BROADCAST_THROTTLE_MS) {
+        lastBroadcast = now;
+        broadcastChannel.send({
+          type: 'broadcast',
+          event: 'driver-location',
+          payload: { lat: loc.lat, lng: loc.lng, ts: now },
+        });
+      }
+
+      // DB write (throttled to 5s) — for persistence & fallback
       if (now - lastDbUpdate >= DB_THROTTLE_MS) {
         lastDbUpdate = now;
         supabase.from('shuttles').update({
@@ -298,6 +316,7 @@ const ActiveRide = () => {
     return () => {
       navigator.geolocation.clearWatch(watchId);
       clearInterval(intervalId);
+      supabase.removeChannel(broadcastChannel);
     };
   }, [shuttle?.id]);
 
