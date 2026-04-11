@@ -261,19 +261,44 @@ const ActiveRide = () => {
   // Update driver location & push to DB
   useEffect(() => {
     if (!shuttle?.id || !navigator.geolocation) return;
-    const watchId = navigator.geolocation.watchPosition(
-      async (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setDriverLocation(loc);
-        await supabase.from('shuttles').update({
+
+    let lastDbUpdate = 0;
+    const DB_THROTTLE_MS = 3000; // throttle DB writes to every 3s
+
+    const updateLocation = (pos: GeolocationPosition) => {
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setDriverLocation(loc);
+
+      const now = Date.now();
+      if (now - lastDbUpdate >= DB_THROTTLE_MS) {
+        lastDbUpdate = now;
+        supabase.from('shuttles').update({
           current_lat: loc.lat,
           current_lng: loc.lng,
         }).eq('id', shuttle.id);
-      },
+      }
+    };
+
+    // watchPosition for instant updates
+    const watchId = navigator.geolocation.watchPosition(
+      updateLocation,
       () => {},
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
-    return () => navigator.geolocation.clearWatch(watchId);
+
+    // Fallback: poll every 2s in case watchPosition fires slowly
+    const intervalId = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        updateLocation,
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+      );
+    }, 2000);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      clearInterval(intervalId);
+    };
   }, [shuttle?.id]);
 
   // Auto-detect arrival at current stop
