@@ -147,6 +147,18 @@ const DriverDashboard = () => {
     fetchData();
   }, [user]);
 
+  // Real-time subscription for stops changes — refresh allRoutes when stops are modified
+  useEffect(() => {
+    const channel = supabase
+      .channel('stops-realtime-driver')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stops' }, async () => {
+        const { data: routesData } = await supabase.from('routes').select('*, stops(*)').eq('status', 'active');
+        setAllRoutes(routesData || []);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const handleSignOut = async () => { await signOut(); navigate('/'); };
   const toggleTrip = (key: string) => {
     setExpandedTrips(prev => {

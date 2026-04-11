@@ -202,6 +202,20 @@ const BookRide = () => {
     });
   }, [selectedRide?.route_id, routeStops]);
 
+  // Real-time subscription for stops changes
+  useEffect(() => {
+    if (!selectedRide?.route_id) return;
+    const routeId = selectedRide.route_id;
+    const channel = supabase
+      .channel('stops-realtime-bookride')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stops', filter: `route_id=eq.${routeId}` }, async () => {
+        const { data: stops } = await supabase.from('stops').select('*').eq('route_id', routeId).order('stop_order');
+        setRouteStops(stops || []);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedRide?.route_id]);
+
   const selectRide = async (ride: any) => {
     setSelectedRide(ride);
     setDriverProfile(ride.driver_profile);
