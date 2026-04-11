@@ -170,7 +170,7 @@ const MapPinPicker = ({ activePin, origin, destination, onConfirm, onCancel, cla
 
       {/* Instructions banner */}
       {activePin && (
-        <div className="absolute top-3 left-3 right-3 z-10">
+        <div className="absolute top-3 left-3 right-3" style={{ zIndex: 9999 }}>
           <div className="bg-card/95 backdrop-blur-sm border border-border rounded-xl px-4 py-2.5 shadow-lg text-center">
             <p className="text-sm font-medium text-foreground">
               {lang === 'ar'
@@ -183,7 +183,7 @@ const MapPinPicker = ({ activePin, origin, destination, onConfirm, onCancel, cla
 
       {/* Confirm / Cancel buttons */}
       {activePin && (
-        <div className="absolute bottom-4 left-3 right-3 z-10 flex gap-2">
+        <div className="absolute bottom-4 left-3 right-3 flex gap-2" style={{ zIndex: 9999 }}>
           <Button variant="outline" className="flex-1 bg-card/95 backdrop-blur-sm" onClick={onCancel}>
             <X className="w-4 h-4 me-1" />
             {lang === 'ar' ? 'إلغاء' : 'Cancel'}
