@@ -25,6 +25,7 @@ const MapPinPicker = ({ activePin, origin, destination, onConfirm, onCancel, cla
   const [locating, setLocating] = useState(false);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const initialCenterRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const { isLoaded, loadError } = useJsApiLoader({ googleMapsApiKey: GOOGLE_MAPS_KEY, libraries });
 
@@ -60,11 +61,14 @@ const MapPinPicker = ({ activePin, origin, destination, onConfirm, onCancel, cla
   }, [isLoaded, origin?.lat, origin?.lng, destination?.lat, destination?.lng]);
 
   const getInitialCenter = () => {
-    if (activePin === 'origin' && origin?.lat) return { lat: origin.lat, lng: origin.lng };
-    if (activePin === 'destination' && destination?.lat) return { lat: destination.lat, lng: destination.lng };
-    if (origin?.lat) return { lat: origin.lat, lng: origin.lng };
-    if (destination?.lat) return { lat: destination.lat, lng: destination.lng };
-    return cairoCenter;
+    if (initialCenterRef.current) return initialCenterRef.current;
+    let c = cairoCenter;
+    if (activePin === 'origin' && origin?.lat) c = { lat: origin.lat, lng: origin.lng };
+    else if (activePin === 'destination' && destination?.lat) c = { lat: destination.lat, lng: destination.lng };
+    else if (origin?.lat) c = { lat: origin.lat, lng: origin.lng };
+    else if (destination?.lat) c = { lat: destination.lat, lng: destination.lng };
+    initialCenterRef.current = c;
+    return c;
   };
 
   const handleConfirm = () => {
@@ -122,7 +126,7 @@ const MapPinPicker = ({ activePin, origin, destination, onConfirm, onCancel, cla
     <div className={`relative h-full w-full overflow-hidden ${className}`}>
       <GoogleMap
         mapContainerStyle={containerStyle}
-        center={getInitialCenter()}
+        center={activePin ? undefined : getInitialCenter()}
         zoom={14}
         onLoad={onLoad}
         options={{
@@ -154,13 +158,13 @@ const MapPinPicker = ({ activePin, origin, destination, onConfirm, onCancel, cla
       {/* Center pin overlay - always centered on screen */}
       {activePin && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 9999 }}>
-          <div className="flex flex-col items-center animate-bounce" style={{ marginTop: '-48px' }}>
-            <svg width="56" height="72" viewBox="0 0 32 42" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>
+          <div className="flex flex-col items-center" style={{ marginTop: '-32px' }}>
+            <svg width="36" height="48" viewBox="0 0 32 42" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}>
               <path d="M16 0C7.2 0 0 7.2 0 16c0 12 16 26 16 26s16-14 16-26C32 7.2 24.8 0 16 0z" fill={pinColor} stroke="white" strokeWidth="2.5"/>
               <circle cx="16" cy="16" r="7" fill="white" opacity="0.95"/>
             </svg>
           </div>
-          <div className="absolute w-3 h-3 rounded-full bg-black/40" style={{ top: '50%', marginTop: '2px' }} />
+          <div className="absolute w-2 h-2 rounded-full bg-black/30" style={{ top: '50%', marginTop: '2px' }} />
         </div>
       )}
 
