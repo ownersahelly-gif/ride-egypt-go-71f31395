@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { toast } from 'sonner';
 import MapView from '@/components/MapView';
+import PlacesAutocomplete from '@/components/PlacesAutocomplete';
 import {
   ChevronLeft, Route, Users, Car, Ticket, BarChart3, Plus, Edit, Trash2,
   CheckCircle2, XCircle, MapPin, Clock, Search, Globe, LogOut, Shield,
