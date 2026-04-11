@@ -999,7 +999,6 @@ const DriverDashboard = () => {
                         </div>
                       );
                     })()}
-                    )}
                     {!selectedRouteForSchedule && (
                       <div className="space-y-2">
                         <Label>{lang === 'ar' ? 'اختر المسار' : 'Select Route'}</Label>
