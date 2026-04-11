@@ -509,14 +509,20 @@ const ActiveRide = () => {
               <span>{lang === 'ar' ? currentActive.stop.name_ar : currentActive.stop.name_en}</span>
             </div>
 
-            {/* Navigate to this stop */}
+            {/* Navigate to this stop and remaining stops */}
             <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${currentActive.stop.lat},${currentActive.stop.lng}&travelmode=driving`}
+              href={(() => {
+                const remainingStops = activeStops.slice(currentStopIndex);
+                const lastStop = remainingStops[remainingStops.length - 1];
+                const destination = route ? `${route.destination_lat},${route.destination_lng}` : `${lastStop.stop.lat},${lastStop.stop.lng}`;
+                const waypoints = remainingStops.map(as => `${as.stop.lat},${as.stop.lng}`).join('|');
+                return `https://www.google.com/maps/dir/?api=1&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+              })()}
               target="_blank" rel="noopener noreferrer" className="mb-4 block"
             >
               <Button variant="secondary" className="w-full gap-2">
                 <Navigation className="w-4 h-4" />
-                {lang === 'ar' ? 'الملاحة لهذا التوقف' : 'Navigate to this stop'}
+                {lang === 'ar' ? 'افتح الملاحة في خرائط جوجل' : 'Open Navigation in Google Maps'}
                 <ArrowRight className="w-4 h-4 ms-auto" />
               </Button>
             </a>
