@@ -173,7 +173,7 @@ const CarpoolManage = () => {
         <p className="text-sm text-primary-foreground/70 truncate">{route.origin_name} → {route.destination_name}</p>
       </div>
 
-      <div className="h-48">
+      <div className="h-48 shrink-0">
         <MapView
           markers={mapMarkers}
           origin={{ lat: route.origin_lat, lng: route.origin_lng }}
