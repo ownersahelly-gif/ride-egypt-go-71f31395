@@ -159,9 +159,59 @@ const ActiveRide = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Find nearest route stop to a given lat/lng
+  const findNearestStop = useCallback((lat: number, lng: number): RouteStop | null => {
+    if (!routeStops.length) return null;
+    let nearest = routeStops[0];
+    let minDist = haversineDistance({ lat, lng }, { lat: nearest.lat, lng: nearest.lng });
+    for (const s of routeStops) {
+      const d = haversineDistance({ lat, lng }, { lat: s.lat, lng: s.lng });
+      if (d < minDist) { minDist = d; nearest = s; }
+    }
+    return nearest;
+  }, [routeStops]);
+
   // Build active stops from route stops + bookings
   useEffect(() => {
-    if (!route || !routeStops.length) { setActiveStops([]); return; }
+    if (!route) { setActiveStops([]); return; }
+
+    // If no route stops defined, create virtual stops from custom locations
+    if (!routeStops.length) {
+      const virtualStops: ActiveStop[] = [];
+      bookings.forEach(b => {
+        const profile = profiles[b.user_id];
+        const name = profile?.full_name || (lang === 'ar' ? 'راكب' : 'Passenger');
+        const passenger: StopPassenger = {
+          bookingId: b.id, userId: b.user_id, name,
+          phone: profile?.phone, boardingCode: b.boarding_code,
+          status: b.status, type: 'pickup',
+          totalPrice: parseFloat(b.total_price || 0),
+          paymentProofUrl: b.payment_proof_url, seats: b.seats || 1,
+        };
+        if (b.status === 'confirmed' && (b.custom_pickup_lat || b.pickup_stop_id)) {
+          const lat = b.custom_pickup_lat || 0;
+          const lng = b.custom_pickup_lng || 0;
+          const stopName = b.custom_pickup_name || 'Pickup';
+          virtualStops.push({
+            stop: { id: `virtual-pickup-${b.id}`, name_en: stopName, name_ar: stopName, lat, lng, stop_order: 0, stop_type: 'pickup' },
+            pickupPassengers: [{ ...passenger, type: 'pickup' }],
+            dropoffPassengers: [],
+          });
+        }
+        if (b.status === 'boarded' && (b.custom_dropoff_lat || b.dropoff_stop_id)) {
+          const lat = b.custom_dropoff_lat || 0;
+          const lng = b.custom_dropoff_lng || 0;
+          const stopName = b.custom_dropoff_name || 'Dropoff';
+          virtualStops.push({
+            stop: { id: `virtual-dropoff-${b.id}`, name_en: stopName, name_ar: stopName, lat, lng, stop_order: 999, stop_type: 'dropoff' },
+            pickupPassengers: [],
+            dropoffPassengers: [{ ...passenger, type: 'dropoff' }],
+          });
+        }
+      });
+      setActiveStops(virtualStops);
+      return;
+    }
 
     const stops: ActiveStop[] = [];
 
@@ -173,44 +223,40 @@ const ActiveRide = () => {
         const profile = profiles[b.user_id];
         const name = profile?.full_name || (lang === 'ar' ? 'راكب' : 'Passenger');
 
-        if (b.pickup_stop_id === stop.id && b.status === 'confirmed') {
+        // Match by stop ID, or by nearest stop if using custom location
+        const pickupMatch = b.pickup_stop_id === stop.id ||
+          (!b.pickup_stop_id && b.custom_pickup_lat && findNearestStop(b.custom_pickup_lat, b.custom_pickup_lng)?.id === stop.id);
+
+        const dropoffMatch = b.dropoff_stop_id === stop.id ||
+          (!b.dropoff_stop_id && b.custom_dropoff_lat && findNearestStop(b.custom_dropoff_lat, b.custom_dropoff_lng)?.id === stop.id);
+
+        if (pickupMatch && b.status === 'confirmed') {
           pickupPassengers.push({
-            bookingId: b.id,
-            userId: b.user_id,
-            name,
-            phone: profile?.phone,
-            boardingCode: b.boarding_code,
-            status: b.status,
-            type: 'pickup',
+            bookingId: b.id, userId: b.user_id, name,
+            phone: profile?.phone, boardingCode: b.boarding_code,
+            status: b.status, type: 'pickup',
             totalPrice: parseFloat(b.total_price || 0),
-            paymentProofUrl: b.payment_proof_url,
-            seats: b.seats || 1,
+            paymentProofUrl: b.payment_proof_url, seats: b.seats || 1,
           });
         }
 
-        if (b.dropoff_stop_id === stop.id && b.status === 'boarded') {
+        if (dropoffMatch && b.status === 'boarded') {
           dropoffPassengers.push({
-            bookingId: b.id,
-            userId: b.user_id,
-            name,
-            phone: profile?.phone,
-            status: b.status,
-            type: 'dropoff',
+            bookingId: b.id, userId: b.user_id, name,
+            phone: profile?.phone, status: b.status, type: 'dropoff',
             totalPrice: parseFloat(b.total_price || 0),
-            paymentProofUrl: b.payment_proof_url,
-            seats: b.seats || 1,
+            paymentProofUrl: b.payment_proof_url, seats: b.seats || 1,
           });
         }
       });
 
-      // Only include stops that have bookings
       if (pickupPassengers.length > 0 || dropoffPassengers.length > 0) {
         stops.push({ stop, pickupPassengers, dropoffPassengers });
       }
     }
 
     setActiveStops(stops);
-  }, [route, routeStops, bookings, profiles, lang]);
+  }, [route, routeStops, bookings, profiles, lang, findNearestStop]);
 
   // Update driver location & push to DB
   useEffect(() => {
