@@ -262,64 +262,85 @@ const ActiveRide = () => {
 
   // Update driver location: Broadcast for instant passenger updates + DB writes for persistence
   useEffect(() => {
-    if (!shuttle?.id || !navigator.geolocation) return;
+    if (!shuttle?.id) return;
 
     let lastDbUpdate = 0;
-    const DB_THROTTLE_MS = 5000; // DB writes every 5s for persistence
-    const BROADCAST_THROTTLE_MS = 1000; // broadcast every 1s for instant tracking
+    const DB_THROTTLE_MS = 5000;
+    const BROADCAST_THROTTLE_MS = 1000;
     let lastBroadcast = 0;
+    let cancelled = false;
 
-    // Create a broadcast channel for instant location sharing
     const broadcastChannel = supabase.channel(`shuttle-live-${shuttle.id}`);
     broadcastChannel.subscribe();
 
-    const updateLocation = (pos: GeolocationPosition) => {
-      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setDriverLocation(loc);
-
+    const handleLocation = (lat: number, lng: number) => {
+      if (cancelled) return;
+      setDriverLocation({ lat, lng });
       const now = Date.now();
 
-      // Broadcast instantly (throttled to 1s) — passengers receive this in real-time
       if (now - lastBroadcast >= BROADCAST_THROTTLE_MS) {
         lastBroadcast = now;
         broadcastChannel.send({
           type: 'broadcast',
           event: 'driver-location',
-          payload: { lat: loc.lat, lng: loc.lng, ts: now },
+          payload: { lat, lng, ts: now },
         });
       }
 
-      // DB write (throttled to 5s) — for persistence & fallback
       if (now - lastDbUpdate >= DB_THROTTLE_MS) {
         lastDbUpdate = now;
         supabase.from('shuttles').update({
-          current_lat: loc.lat,
-          current_lng: loc.lng,
+          current_lat: lat, current_lng: lng,
         }).eq('id', shuttle.id);
       }
     };
 
-    // watchPosition for instant updates
-    const watchId = navigator.geolocation.watchPosition(
-      updateLocation,
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
-    );
+    const isNative = Capacitor.isNativePlatform();
 
-    // Fallback: poll every 2s in case watchPosition fires slowly
-    const intervalId = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(
-        updateLocation,
-        () => {},
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    if (isNative) {
+      // Use Capacitor native GPS — accurate and not throttled in background
+      let watchId: string | undefined;
+      Geolocation.watchPosition(
+        { enableHighAccuracy: true, timeout: 10000, minimumUpdateInterval: 1000 },
+        (position, err) => {
+          if (position && !err) {
+            handleLocation(position.coords.latitude, position.coords.longitude);
+          }
+        }
+      ).then(id => { watchId = id; });
+
+      return () => {
+        cancelled = true;
+        if (watchId) Geolocation.clearWatch({ id: watchId });
+        supabase.removeChannel(broadcastChannel);
+      };
+    } else {
+      // Browser fallback
+      if (!navigator.geolocation) return;
+
+      const updateLocation = (pos: GeolocationPosition) => {
+        handleLocation(pos.coords.latitude, pos.coords.longitude);
+      };
+
+      const watchId = navigator.geolocation.watchPosition(
+        updateLocation, () => {},
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
       );
-    }, 2000);
 
-    return () => {
-      navigator.geolocation.clearWatch(watchId);
-      clearInterval(intervalId);
-      supabase.removeChannel(broadcastChannel);
-    };
+      const intervalId = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(
+          updateLocation, () => {},
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+        );
+      }, 2000);
+
+      return () => {
+        cancelled = true;
+        navigator.geolocation.clearWatch(watchId);
+        clearInterval(intervalId);
+        supabase.removeChannel(broadcastChannel);
+      };
+    }
   }, [shuttle?.id]);
 
   // Auto-detect arrival at current stop
