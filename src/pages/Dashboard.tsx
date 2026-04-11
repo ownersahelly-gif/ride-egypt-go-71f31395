@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -6,18 +6,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import MapView from '@/components/MapView';
-import MapPinPicker from '@/components/MapPinPicker';
 import PlacesAutocomplete from '@/components/PlacesAutocomplete';
 import BottomNav from '@/components/BottomNav';
 import { useBookingNotifications } from '@/hooks/useBookingNotifications';
 import { useRideMessageNotifications } from '@/hooks/useRideMessageNotifications';
 import {
   MapPin, Clock, Users, ArrowRight, Calendar, AlertCircle, Car,
-  User as UserIcon, Loader2, CheckCircle2, XCircle, Navigation,
-  Upload, Image as ImageIcon, ListOrdered, Phone, History, Package,
-  Bookmark, Globe, LogOut, Shield, ChevronLeft, ChevronRight
+  User as UserIcon, Loader2, CheckCircle2,
+  Upload, ListOrdered, History, Package,
+  Globe, LogOut, Shield, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
@@ -33,20 +31,6 @@ const haversineDistanceKm = (a: { lat: number; lng: number }, b: { lat: number; 
 };
 
 /** Project point onto the closest position on line segment A→B (in lat/lng space) */
-const closestPointOnSegment = (
-  p: { lat: number; lng: number },
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number },
-): { lat: number; lng: number } => {
-  const dx = b.lng - a.lng;
-  const dy = b.lat - a.lat;
-  if (dx === 0 && dy === 0) return a; // segment is a point
-  let t = ((p.lng - a.lng) * dx + (p.lat - a.lat) * dy) / (dx * dx + dy * dy);
-  t = Math.max(0, Math.min(1, t));
-  return { lat: a.lat + t * dy, lng: a.lng + t * dx };
-};
-
-
 type PointSelection = { lat: number; lng: number; name: string } | null;
 
 const Dashboard = () => {
@@ -77,18 +61,14 @@ const Dashboard = () => {
   const [shuttleInfo, setShuttleInfo] = useState<any>(null);
 
   // Detail step states
-  const [pickupMode, setPickupMode] = useState<'start' | 'nearby'>('start');
-  const [customPickup, setCustomPickup] = useState<PointSelection>(null);
-  const [validatingPickup, setValidatingPickup] = useState(false);
-  const [pickupResult, setPickupResult] = useState<{ ok: boolean; minutes: number; onRoute: boolean } | null>(null);
-  const [dropoffMode, setDropoffMode] = useState<'end' | 'nearby'>('end');
-  const [customDropoff, setCustomDropoff] = useState<PointSelection>(null);
-  const [validatingDropoff, setValidatingDropoff] = useState(false);
-  const [dropoffResult, setDropoffResult] = useState<{ ok: boolean; minutes: number; onRoute: boolean } | null>(null);
-  const [mapClickTarget, setMapClickTarget] = useState<'pickup' | 'dropoff'>('pickup');
+  const [pickupMode, setPickupMode] = useState<'start' | 'stop'>('start');
+  const [selectedPickupStop, setSelectedPickupStop] = useState<any>(null);
+  const [dropoffMode, setDropoffMode] = useState<'end' | 'stop'>('end');
+  const [selectedDropoffStop, setSelectedDropoffStop] = useState<any>(null);
   const [tripDirection, setTripDirection] = useState<'go' | 'return' | 'both'>('both');
   const [routeDirections, setRouteDirections] = useState<any>(null);
-  const [nearestRoutePoint, setNearestRoutePoint] = useState<{ lat: number; lng: number } | null>(null);
+  const [routeStops, setRouteStops] = useState<any[]>([]);
+  const [availableDirections, setAvailableDirections] = useState<('go' | 'return')[]>([]);
 
   // Saved locations & bundles
   const [savedLocations, setSavedLocations] = useState<any[]>([]);
@@ -247,15 +227,38 @@ const Dashboard = () => {
     setSelectedRide(ride);
     setDriverProfile(ride.driver_profile);
     setShuttleInfo(ride.shuttle_info);
-    setCustomPickup(null);
-    setCustomDropoff(null);
-    setPickupResult(null);
-    setDropoffResult(null);
+    setSelectedPickupStop(null);
+    setSelectedDropoffStop(null);
     setPickupMode('start');
     setDropoffMode('end');
     setUseBundle(false);
-    setTripDirection('both');
     setStep('details');
+
+    // Fetch stops for this route
+    const { data: stops } = await supabase
+      .from('stops')
+      .select('*')
+      .eq('route_id', ride.route_id)
+      .order('stop_order');
+    setRouteStops(stops || []);
+
+    // Check available directions for this route+date
+    const { data: allRides } = await supabase
+      .from('ride_instances')
+      .select('direction')
+      .eq('route_id', ride.route_id)
+      .eq('ride_date', ride.ride_date)
+      .eq('status', 'scheduled');
+    const dirs = [...new Set((allRides || []).map(r => r.direction))] as ('go' | 'return')[];
+    setAvailableDirections(dirs);
+    // Set default trip direction based on available directions
+    if (dirs.length === 1) {
+      setTripDirection(dirs[0]);
+    } else if (dirs.includes('go') && dirs.includes('return')) {
+      setTripDirection('both');
+    } else {
+      setTripDirection(ride.direction || 'go');
+    }
 
     if (user && ride.route_id) {
       const [{ data: savedLocs }, { data: bundles }, { data: purchases }] = await Promise.all([
@@ -269,152 +272,52 @@ const Dashboard = () => {
     }
   };
 
-  // Validate custom point using Google Directions driving distance
-  /** Find nearest point on route polyline (straight-line) for the visual connection line */
-  const findNearestRoutePoint = (point: { lat: number; lng: number }): { nearest: { lat: number; lng: number } | null } => {
-    let nearest: { lat: number; lng: number } | null = null;
-    let minDist = Infinity;
-    if (routeDirections) {
-      const path = routeDirections.routes?.[0]?.overview_path;
-      if (path && path.length > 1) {
-        for (let i = 0; i < path.length - 1; i++) {
-          const a = { lat: path[i].lat(), lng: path[i].lng() };
-          const b = { lat: path[i + 1].lat(), lng: path[i + 1].lng() };
-          const projected = closestPointOnSegment(point, a, b);
-          const d = haversineDistanceKm(point, projected);
-          if (d < minDist) { minDist = d; nearest = projected; }
-        }
-      } else if (path && path.length === 1) {
-        nearest = { lat: path[0].lat(), lng: path[0].lng() };
-      }
+  // Find closest stop to a searched location
+  const findClosestStop = (point: { lat: number; lng: number }, stopType?: 'pickup' | 'dropoff'): any | null => {
+    if (!routeStops.length) return null;
+    let filteredStops = routeStops;
+    if (stopType === 'pickup') {
+      filteredStops = routeStops.filter(s => s.stop_type === 'pickup' || s.stop_type === 'both');
+    } else if (stopType === 'dropoff') {
+      filteredStops = routeStops.filter(s => s.stop_type === 'dropoff' || s.stop_type === 'both');
     }
-    if (!nearest && selectedRide?.routes) {
-      const dO = haversineDistanceKm(point, { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng });
-      const dD = haversineDistanceKm(point, { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng });
-      nearest = dO < dD
-        ? { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng }
-        : { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng };
+    if (!filteredStops.length) filteredStops = routeStops;
+    let closest = filteredStops[0];
+    let minDist = haversineDistanceKm(point, { lat: closest.lat, lng: closest.lng });
+    for (let i = 1; i < filteredStops.length; i++) {
+      const d = haversineDistanceKm(point, { lat: filteredStops[i].lat, lng: filteredStops[i].lng });
+      if (d < minDist) { minDist = d; closest = filteredStops[i]; }
     }
-    return { nearest };
+    return closest;
   };
 
-  const MAX_DISTANCE_KM = 0.7;
-  const validateCustomPoint = useCallback(async (
-    point: { lat: number; lng: number; name: string },
-    type: 'pickup' | 'dropoff',
-  ) => {
-    if (!selectedRide?.routes) return;
-    const setValidating = type === 'pickup' ? setValidatingPickup : setValidatingDropoff;
-    const setResult = type === 'pickup' ? setPickupResult : setDropoffResult;
-    const setCustom = type === 'pickup' ? setCustomPickup : setCustomDropoff;
-    setValidating(true);
-    setResult(null);
-    setCustom(point);
-
-    const { nearest } = findNearestRoutePoint(point);
-    setNearestRoutePoint(nearest);
-
-    const isReturnRide = selectedRide.direction === 'return';
-    const origin = isReturnRide
-      ? { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng }
-      : { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng };
-    const destination = isReturnRide
-      ? { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng }
-      : { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng };
-
-    const getRouteDistanceKm = (result: google.maps.DirectionsResult | null) =>
-      (result?.routes?.[0]?.legs || []).reduce((sum, leg) => sum + ((leg.distance?.value || 0) / 1000), 0);
-
-    try {
-      if (typeof google === 'undefined' || !google?.maps?.DirectionsService) throw new Error('Directions unavailable');
-
-      const directionsService = new google.maps.DirectionsService();
-      const getDirections = (waypoints?: google.maps.DirectionsWaypoint[]) =>
-        new Promise<google.maps.DirectionsResult | null>((resolve) => {
-          directionsService.route({
-            origin,
-            destination,
-            travelMode: google.maps.TravelMode.DRIVING,
-            waypoints,
-            optimizeWaypoints: false,
-          }, (res, status) => {
-            resolve(status === 'OK' ? res : null);
-          });
-        });
-
-      const baseResult = routeDirections || await getDirections();
-      const waypointResult = await getDirections([{ location: point, stopover: true }]);
-
-      const baseDistanceKm = getRouteDistanceKm(baseResult);
-      const withWaypointDistanceKm = getRouteDistanceKm(waypointResult);
-      const extraDistanceKm = Math.max(0, withWaypointDistanceKm - baseDistanceKm);
-      const ok = extraDistanceKm <= MAX_DISTANCE_KM;
-      const onRoute = extraDistanceKm <= 0.1;
-
-      setResult({ ok, minutes: Math.round(extraDistanceKm * 10) / 10, onRoute });
-
-      if (!ok) {
-        toast({
-          title: lang === 'ar' ? 'موقع بعيد عن المسار' : 'Too far from route',
-          description: lang === 'ar'
-            ? 'هذا الموقع بعيد جداً عن المسار، يرجى اختيار موقع أقرب'
-            : 'This location is too far from the route, please pick a closer spot',
-          variant: 'destructive',
-        });
+  const handleSearchAndMatchStop = (place: { lat: number; lng: number; name: string }, type: 'pickup' | 'dropoff') => {
+    const closest = findClosestStop(place, type);
+    if (closest) {
+      if (type === 'pickup') {
+        setSelectedPickupStop(closest);
+        setPickupMode('stop');
       } else {
-        toast({
-          title: lang === 'ar' ? '✅ موقع مقبول' : '✅ Location accepted',
-          description: lang === 'ar'
-            ? `إضافة هذا الموقع تزيد الرحلة ${extraDistanceKm.toFixed(1)} كم`
-            : `This point adds ${extraDistanceKm.toFixed(1)} km to the route`,
-        });
+        setSelectedDropoffStop(closest);
+        setDropoffMode('stop');
       }
-    } catch {
-      const fallbackKm = nearest ? haversineDistanceKm(point, nearest) * 2 : 999;
-      const ok = fallbackKm <= MAX_DISTANCE_KM;
-      const onRoute = fallbackKm <= 0.1;
-      setResult({ ok, minutes: Math.round(fallbackKm * 10) / 10, onRoute });
-    } finally {
-      setValidating(false);
+      const dist = haversineDistanceKm(place, { lat: closest.lat, lng: closest.lng });
+      toast({
+        title: lang === 'ar' ? '📍 أقرب نقطة توقف' : '📍 Nearest stop matched',
+        description: lang === 'ar'
+          ? `${lang === 'ar' ? closest.name_ar : closest.name_en} (${dist.toFixed(1)} كم)`
+          : `${closest.name_en} (${dist.toFixed(1)} km away)`,
+      });
     }
-  }, [selectedRide, routeDirections, lang, toast]);
+  };
 
-  const handleMapPinConfirm = useCallback((target: 'pickup' | 'dropoff', point: { lat: number; lng: number; name: string }) => {
-    validateCustomPoint(point, target);
-  }, [validateCustomPoint]);
+  const isPickupValid = true; // Always valid - either start point or a predefined stop
+  const isDropoffValid = true;
 
-  const isPickupValid = pickupMode === 'start' ? true : (!!customPickup && pickupResult?.ok === true);
-  const isDropoffValid = dropoffMode === 'end' ? true : (!!customDropoff && dropoffResult?.ok === true);
-
-  // Dynamic price calculation using real driving distance
-  const [detailDrivingDistKm, setDetailDrivingDistKm] = useState<number | null>(null);
-  useEffect(() => {
-    if (!selectedRide?.routes) { setDetailDrivingDistKm(null); return; }
-    const route = selectedRide.routes;
-    const pLat = pickupMode === 'start' ? route.origin_lat : (customPickup?.lat ?? route.origin_lat);
-    const pLng = pickupMode === 'start' ? route.origin_lng : (customPickup?.lng ?? route.origin_lng);
-    const dLat = dropoffMode === 'end' ? route.destination_lat : (customDropoff?.lat ?? route.destination_lat);
-    const dLng = dropoffMode === 'end' ? route.destination_lng : (customDropoff?.lng ?? route.destination_lng);
-    const from = { lat: pLat, lng: pLng };
-    const to = { lat: dLat, lng: dLng };
-    if (typeof google === 'undefined' || !google?.maps?.DirectionsService) {
-      setDetailDrivingDistKm(haversineDistanceKm(from, to));
-      return;
-    }
-    const ds = new google.maps.DirectionsService();
-    ds.route({ origin: from, destination: to, travelMode: google.maps.TravelMode.DRIVING }, (res, status) => {
-      if (status === 'OK' && res?.routes?.[0]?.legs?.[0]?.distance?.value) {
-        setDetailDrivingDistKm(res.routes[0].legs[0].distance.value / 1000);
-      } else {
-        setDetailDrivingDistKm(haversineDistanceKm(from, to));
-      }
-    });
-  }, [selectedRide?.route_id, pickupMode, dropoffMode, customPickup?.lat, customPickup?.lng, customDropoff?.lat, customDropoff?.lng]);
-
-  const dynamicPrice = detailDrivingDistKm !== null ? Math.max(10, Math.round(detailDrivingDistKm * pricePerKm)) : 0;
+  // Dynamic price - use route price directly
+  const dynamicPrice = selectedRide?.routes?.price || 0;
 
   const isRideFull = selectedRide?.available_seats === 0;
-  const isNearbyMode = pickupMode === 'nearby' || dropoffMode === 'nearby';
 
   // Payment file handler
   const handlePaymentFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -428,29 +331,16 @@ const Dashboard = () => {
     setPaymentPreview(URL.createObjectURL(file));
   };
 
-  // Handle sign out
   const handleSignOut = async () => { await signOut(); navigate('/'); };
 
   // Booking handler
   const handleBook = async (asWaitlist = false) => {
     if (!user) { navigate('/login'); return; }
     if (!selectedRide) return;
-    if (!isPickupValid || !isDropoffValid) {
-      toast({ title: lang === 'ar' ? 'اختر نقاط الركوب والنزول' : 'Select pickup & dropoff', variant: 'destructive' });
-      return;
-    }
-    const usingBundle = useBundle && activeBundlePurchase;
-    if (!asWaitlist && !usingBundle && !paymentProof) {
-      toast({ title: lang === 'ar' ? 'أرفق إثبات الدفع' : 'Attach payment proof', variant: 'destructive' });
-      return;
-    }
-    if (!asWaitlist && selectedRide.available_seats < 1) {
-      toast({ title: lang === 'ar' ? 'لا توجد مقاعد' : 'No seats available', variant: 'destructive' });
-      return;
-    }
     setLoading(true);
     try {
       let proofUrl: string | null = null;
+      const usingBundle = useBundle && activeBundlePurchase;
       if (paymentProof && !usingBundle) {
         setUploadingProof(true);
         const ext = paymentProof.name.split('.').pop();
@@ -471,78 +361,52 @@ const Dashboard = () => {
       }
 
       const route = selectedRide.routes;
-      const pickupLat = pickupMode === 'start' ? route.origin_lat : customPickup?.lat;
-      const pickupLng = pickupMode === 'start' ? route.origin_lng : customPickup?.lng;
-      const pickupName = pickupMode === 'start' ? (lang === 'ar' ? route.origin_name_ar : route.origin_name_en) : customPickup?.name;
-      const dropoffLat = dropoffMode === 'end' ? route.destination_lat : customDropoff?.lat;
-      const dropoffLng = dropoffMode === 'end' ? route.destination_lng : customDropoff?.lng;
-      const dropoffName = dropoffMode === 'end' ? (lang === 'ar' ? route.destination_name_ar : route.destination_name_en) : customDropoff?.name;
+      const pickupLat = pickupMode === 'stop' && selectedPickupStop ? selectedPickupStop.lat : route.origin_lat;
+      const pickupLng = pickupMode === 'stop' && selectedPickupStop ? selectedPickupStop.lng : route.origin_lng;
+      const pickupName = pickupMode === 'stop' && selectedPickupStop
+        ? (lang === 'ar' ? selectedPickupStop.name_ar : selectedPickupStop.name_en)
+        : (lang === 'ar' ? route.origin_name_ar : route.origin_name_en);
+      const dropoffLat = dropoffMode === 'stop' && selectedDropoffStop ? selectedDropoffStop.lat : route.destination_lat;
+      const dropoffLng = dropoffMode === 'stop' && selectedDropoffStop ? selectedDropoffStop.lng : route.destination_lng;
+      const dropoffName = dropoffMode === 'stop' && selectedDropoffStop
+        ? (lang === 'ar' ? selectedDropoffStop.name_ar : selectedDropoffStop.name_en)
+        : (lang === 'ar' ? route.destination_name_ar : route.destination_name_en);
 
       const basePrice = dynamicPrice;
 
       if (tripDirection === 'both') {
-        // Create TWO separate bookings for round trips
         const goPrice = usingBundle ? 0 : basePrice;
         const returnPrice = usingBundle ? 0 : basePrice;
-
         const commonFields = {
-          user_id: user.id,
-          route_id: selectedRide.route_id,
-          shuttle_id: selectedRide.shuttle_id,
-          seats: 1,
-          scheduled_date: selectedRide.ride_date,
-          scheduled_time: selectedRide.departure_time,
+          user_id: user.id, route_id: selectedRide.route_id, shuttle_id: selectedRide.shuttle_id,
+          seats: 1, scheduled_date: selectedRide.ride_date, scheduled_time: selectedRide.departure_time,
           status: asWaitlist ? 'waitlist' : (usingBundle ? 'confirmed' : 'pending'),
-          payment_proof_url: proofUrl,
-          waitlist_position: waitlistPos,
+          payment_proof_url: proofUrl, waitlist_position: waitlistPos,
         };
-
-        // GO booking: pickup → dropoff as entered
         const { error: goErr } = await supabase.from('bookings').insert({
-          ...commonFields,
-          total_price: goPrice,
-          custom_pickup_lat: pickupLat,
-          custom_pickup_lng: pickupLng,
-          custom_pickup_name: pickupName,
-          custom_dropoff_lat: dropoffLat,
-          custom_dropoff_lng: dropoffLng,
-          custom_dropoff_name: dropoffName,
+          ...commonFields, total_price: goPrice,
+          custom_pickup_lat: pickupLat, custom_pickup_lng: pickupLng, custom_pickup_name: pickupName,
+          custom_dropoff_lat: dropoffLat, custom_dropoff_lng: dropoffLng, custom_dropoff_name: dropoffName,
           trip_direction: 'go',
         });
         if (goErr) throw goErr;
-
-        // RETURN booking: swap pickup ↔ dropoff
         const { error: retErr } = await supabase.from('bookings').insert({
-          ...commonFields,
-          total_price: returnPrice,
-          custom_pickup_lat: dropoffLat,
-          custom_pickup_lng: dropoffLng,
-          custom_pickup_name: dropoffName,
-          custom_dropoff_lat: pickupLat,
-          custom_dropoff_lng: pickupLng,
-          custom_dropoff_name: pickupName,
+          ...commonFields, total_price: returnPrice,
+          custom_pickup_lat: dropoffLat, custom_pickup_lng: dropoffLng, custom_pickup_name: dropoffName,
+          custom_dropoff_lat: pickupLat, custom_dropoff_lng: pickupLng, custom_dropoff_name: pickupName,
           trip_direction: 'return',
         });
         if (retErr) throw retErr;
       } else {
         const totalPrice = usingBundle ? 0 : basePrice;
         const { error } = await supabase.from('bookings').insert({
-          user_id: user.id,
-          route_id: selectedRide.route_id,
-          shuttle_id: selectedRide.shuttle_id,
-          seats: 1,
-          total_price: totalPrice,
-          scheduled_date: selectedRide.ride_date,
+          user_id: user.id, route_id: selectedRide.route_id, shuttle_id: selectedRide.shuttle_id,
+          seats: 1, total_price: totalPrice, scheduled_date: selectedRide.ride_date,
           scheduled_time: selectedRide.departure_time,
           status: asWaitlist ? 'waitlist' : (usingBundle ? 'confirmed' : 'pending'),
-          payment_proof_url: proofUrl,
-          waitlist_position: waitlistPos,
-          custom_pickup_lat: pickupLat,
-          custom_pickup_lng: pickupLng,
-          custom_pickup_name: pickupName,
-          custom_dropoff_lat: dropoffLat,
-          custom_dropoff_lng: dropoffLng,
-          custom_dropoff_name: dropoffName,
+          payment_proof_url: proofUrl, waitlist_position: waitlistPos,
+          custom_pickup_lat: pickupLat, custom_pickup_lng: pickupLng, custom_pickup_name: pickupName,
+          custom_dropoff_lat: dropoffLat, custom_dropoff_lng: dropoffLng, custom_dropoff_name: dropoffName,
           trip_direction: tripDirection,
         });
         if (error) throw error;
@@ -560,9 +424,8 @@ const Dashboard = () => {
         }).eq('id', selectedRide.id);
       }
 
-      // Save location
       if (user && selectedRide.route_id) {
-        const existing = savedLocations.find(sl =>
+        const existing = savedLocations.find((sl: any) =>
           sl.pickup_lat === pickupLat && sl.pickup_lng === pickupLng &&
           sl.dropoff_lat === dropoffLat && sl.dropoff_lng === dropoffLng
         );
@@ -593,7 +456,6 @@ const Dashboard = () => {
     }
   };
 
-  // Buy bundle
   const handleBuyBundle = async (bundle: any) => {
     if (!user || !paymentProof) {
       toast({ title: lang === 'ar' ? 'أرفق إثبات الدفع' : 'Attach payment proof', variant: 'destructive' });
@@ -628,24 +490,32 @@ const Dashboard = () => {
     } finally { setLoading(false); }
   };
 
-  // Apply saved location
   const applySavedLocation = (saved: any) => {
     if (saved.pickup_lat && saved.pickup_lng) {
-      const isDefault = saved.pickup_lat === selectedRide?.routes?.origin_lat && saved.pickup_lng === selectedRide?.routes?.origin_lng;
-      if (isDefault) { setPickupMode('start'); setCustomPickup(null); setPickupResult(null); }
-      else { setPickupMode('nearby'); setCustomPickup({ lat: saved.pickup_lat, lng: saved.pickup_lng, name: saved.pickup_name }); setPickupResult({ ok: true, minutes: 0, onRoute: true }); }
+      const closest = findClosestStop({ lat: saved.pickup_lat, lng: saved.pickup_lng }, 'pickup');
+      if (closest && haversineDistanceKm({ lat: saved.pickup_lat, lng: saved.pickup_lng }, { lat: closest.lat, lng: closest.lng }) < 0.5) {
+        setPickupMode('stop');
+        setSelectedPickupStop(closest);
+      } else {
+        setPickupMode('start');
+        setSelectedPickupStop(null);
+      }
     }
     if (saved.dropoff_lat && saved.dropoff_lng) {
-      const isDefault = saved.dropoff_lat === selectedRide?.routes?.destination_lat && saved.dropoff_lng === selectedRide?.routes?.destination_lng;
-      if (isDefault) { setDropoffMode('end'); setCustomDropoff(null); setDropoffResult(null); }
-      else { setDropoffMode('nearby'); setCustomDropoff({ lat: saved.dropoff_lat, lng: saved.dropoff_lng, name: saved.dropoff_name }); setDropoffResult({ ok: true, minutes: 0, onRoute: true }); }
+      const closest = findClosestStop({ lat: saved.dropoff_lat, lng: saved.dropoff_lng }, 'dropoff');
+      if (closest && haversineDistanceKm({ lat: saved.dropoff_lat, lng: saved.dropoff_lng }, { lat: closest.lat, lng: closest.lng }) < 0.5) {
+        setDropoffMode('stop');
+        setSelectedDropoffStop(closest);
+      } else {
+        setDropoffMode('end');
+        setSelectedDropoffStop(null);
+      }
     }
     toast({ title: lang === 'ar' ? 'تم تطبيق الموقع المحفوظ' : 'Saved location applied' });
   };
 
   const dateOptions = getDateOptions();
 
-  // Map markers
   const mapMarkers: { lat: number; lng: number; label?: string; color?: 'red' | 'green' | 'blue' }[] = [];
   if (step === 'search') {
     if (pickup) mapMarkers.push({ lat: pickup.lat, lng: pickup.lng, label: 'A', color: 'green' });
@@ -656,23 +526,30 @@ const Dashboard = () => {
       { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng, label: 'A', color: 'green' },
       { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng, label: 'B', color: 'red' },
     );
-    if (customPickup && pickupMode === 'nearby') mapMarkers.push({ lat: customPickup.lat, lng: customPickup.lng, label: '📍', color: 'green' });
-    if (customDropoff && dropoffMode === 'nearby') mapMarkers.push({ lat: customDropoff.lat, lng: customDropoff.lng, label: '📍', color: 'red' });
+    if (selectedPickupStop && pickupMode === 'stop') {
+      mapMarkers.push({ lat: selectedPickupStop.lat, lng: selectedPickupStop.lng, label: '📍', color: 'green' });
+    }
+    if (selectedDropoffStop && dropoffMode === 'stop') {
+      mapMarkers.push({ lat: selectedDropoffStop.lat, lng: selectedDropoffStop.lng, label: '📍', color: 'red' });
+    }
+    routeStops.forEach((stop: any) => {
+      mapMarkers.push({ lat: stop.lat, lng: stop.lng, label: (stop.stop_order + 1).toString(), color: 'blue' });
+    });
   }
 
-  // Point selector renderer
-  const renderPointSelector = (
-    type: 'pickup' | 'dropoff',
-    mode: 'start' | 'end' | 'nearby',
-    setMode: (m: any) => void,
-    customPoint: PointSelection,
-    validating: boolean,
-    result: { ok: boolean; minutes: number; onRoute: boolean } | null,
-  ) => {
+  const renderStopSelector = (type: 'pickup' | 'dropoff') => {
     const isPickupType = type === 'pickup';
-    const startLabel = isPickupType ? (lang === 'ar' ? '🚏 نقطة الانطلاق' : '🚏 Starting Point') : (lang === 'ar' ? '🏁 نقطة الوصول' : '🏁 End Point');
-    const nearbyLabel = lang === 'ar' ? '📍 اختر من الخريطة' : '📍 Pick on map';
+    const mode = isPickupType ? pickupMode : dropoffMode;
+    const selectedStop = isPickupType ? selectedPickupStop : selectedDropoffStop;
+    const startLabel = isPickupType
+      ? (lang === 'ar' ? '🚏 نقطة الانطلاق' : '🚏 Starting Point')
+      : (lang === 'ar' ? '🏁 نقطة الوصول' : '🏁 End Point');
+    const stopLabel = lang === 'ar' ? '📍 نقطة توقف' : '📍 Bus Stop';
     const isStartMode = mode === 'start' || mode === 'end';
+
+    const filteredStops = routeStops.filter((s: any) =>
+      isPickupType ? (s.stop_type === 'pickup' || s.stop_type === 'both') : (s.stop_type === 'dropoff' || s.stop_type === 'both')
+    );
 
     return (
       <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
@@ -682,22 +559,23 @@ const Dashboard = () => {
         </h3>
         <div className="flex gap-2">
           <button onClick={() => {
-            if (isPickupType) { setMode('start'); setCustomPickup(null); setPickupResult(null); }
-            else { setMode('end'); setCustomDropoff(null); setDropoffResult(null); }
+            if (isPickupType) { setPickupMode('start'); setSelectedPickupStop(null); }
+            else { setDropoffMode('end'); setSelectedDropoffStop(null); }
           }} className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${isStartMode ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:border-primary/50'}`}>
             {startLabel}
           </button>
-          <button onClick={() => {
-            setMode('nearby'); setMapClickTarget(type);
-            if (isPickupType) { setCustomPickup(null); setPickupResult(null); }
-            else { setCustomDropoff(null); setDropoffResult(null); }
-          }} className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${mode === 'nearby' ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:border-primary/50'}`}>
-            {nearbyLabel}
-          </button>
+          {filteredStops.length > 0 && (
+            <button onClick={() => {
+              if (isPickupType) { setPickupMode('stop'); setSelectedPickupStop(null); }
+              else { setDropoffMode('stop'); setSelectedDropoffStop(null); }
+            }} className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${mode === 'stop' ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:border-primary/50'}`}>
+              {stopLabel}
+            </button>
+          )}
         </div>
 
         {isStartMode && (
-          <div className="flex items-center gap-2 text-sm p-3 rounded-lg bg-green-50 text-green-700">
+          <div className="flex items-center gap-2 text-sm p-3 rounded-lg bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <p className="font-medium text-xs">
               {isPickupType ? (lang === 'ar' ? selectedRide?.routes?.origin_name_ar : selectedRide?.routes?.origin_name_en) : (lang === 'ar' ? selectedRide?.routes?.destination_name_ar : selectedRide?.routes?.destination_name_en)}
@@ -705,25 +583,36 @@ const Dashboard = () => {
           </div>
         )}
 
-        {mode === 'nearby' && (
+        {mode === 'stop' && (
           <div className="space-y-2">
             <PlacesAutocomplete
-              placeholder={isPickupType ? (lang === 'ar' ? 'ابحث عن موقع الركوب...' : 'Search pickup...') : (lang === 'ar' ? 'ابحث عن موقع النزول...' : 'Search dropoff...')}
-              onSelect={(place) => { setMapClickTarget(type); validateCustomPoint({ lat: place.lat, lng: place.lng, name: place.name }, type); }}
+              placeholder={isPickupType ? (lang === 'ar' ? 'ابحث عن موقعك...' : 'Search your location...') : (lang === 'ar' ? 'ابحث عن وجهتك...' : 'Search your destination...')}
+              onSelect={(place) => handleSearchAndMatchStop(place, type)}
               iconColor={isPickupType ? 'text-green-500' : 'text-destructive'}
             />
-            {validating && <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin" />{lang === 'ar' ? 'جاري التحقق...' : 'Checking...'}</div>}
-            {customPoint && result && (
-              <div className={`flex items-center gap-2 text-xs p-2 rounded-lg ${result.ok ? 'bg-green-50 text-green-700' : 'bg-destructive/10 text-destructive'}`}>
-                {result.ok ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium block truncate">{customPoint.name}</span>
-                  <span className="text-[10px] opacity-75">
-                    {result.ok
-                      ? (lang === 'ar' ? `${result.minutes} كم زيادة على المسار ✓` : `${result.minutes} km added to route ✓`)
-                      : (lang === 'ar' ? 'بعيد جداً عن المسار' : 'Too far from route')}
-                  </span>
-                </div>
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {filteredStops.map((stop: any) => (
+                <button
+                  key={stop.id}
+                  onClick={() => {
+                    if (isPickupType) setSelectedPickupStop(stop);
+                    else setSelectedDropoffStop(stop);
+                  }}
+                  className={`w-full text-start px-3 py-2 rounded-lg text-xs border transition-colors flex items-center gap-2 ${
+                    selectedStop?.id === stop.id
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-card text-foreground border-border hover:border-primary/50'
+                  }`}
+                >
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{lang === 'ar' ? stop.name_ar : stop.name_en}</span>
+                </button>
+              ))}
+            </div>
+            {selectedStop && (
+              <div className="flex items-center gap-2 text-xs p-2 rounded-lg bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400">
+                <CheckCircle2 className="w-3 h-3" />
+                <span className="font-medium">{lang === 'ar' ? selectedStop.name_ar : selectedStop.name_en} ✓</span>
               </div>
             )}
           </div>
@@ -732,14 +621,27 @@ const Dashboard = () => {
     );
   };
 
+  const tripDirectionOptions = (() => {
+    const opts: { value: 'go' | 'return' | 'both'; labelAr: string; labelEn: string; mult: number }[] = [];
+    if (availableDirections.includes('go')) {
+      opts.push({ value: 'go', labelAr: 'ذهاب', labelEn: 'Going', mult: 1 });
+    }
+    if (availableDirections.includes('return')) {
+      opts.push({ value: 'return', labelAr: 'عودة', labelEn: 'Return', mult: 1 });
+    }
+    if (availableDirections.includes('go') && availableDirections.includes('return')) {
+      opts.push({ value: 'both', labelAr: 'ذهاب وعودة', labelEn: 'Round Trip', mult: 2 });
+    }
+    return opts;
+  })();
+
   return (
     <div className="h-screen flex flex-col">
-      {/* Top bar */}
       <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0 z-10">
         <div className="flex items-center gap-2">
           {step !== 'search' && (
             <Button variant="ghost" size="sm" className="rounded-full gap-1" onClick={() => {
-              if (step === 'details') { setStep('results'); setSelectedRide(null); setRouteDirections(null); setNearestRoutePoint(null); setCustomPickup(null); setCustomDropoff(null); setPickupResult(null); setDropoffResult(null); }
+              if (step === 'details') { setStep('results'); setSelectedRide(null); setRouteDirections(null); setSelectedPickupStop(null); setSelectedDropoffStop(null); }
               else { setStep('search'); setRideInstances([]); }
             }}>
               <Back className="w-5 h-5" />
@@ -755,209 +657,95 @@ const Dashboard = () => {
             <>
               {isAdmin && (
                 <Link to="/admin">
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    <Shield className="w-4 h-4" />
-                  </Button>
+                  <Button variant="ghost" size="icon" className="rounded-full"><Shield className="w-4 h-4" /></Button>
                 </Link>
               )}
-              <button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} className="rounded-full p-2 hover:bg-muted transition-colors">
-                <Globe className="w-4 h-4" />
-              </button>
-              <Button variant="ghost" size="icon" className="rounded-full" onClick={handleSignOut}>
-                <LogOut className="w-4 h-4" />
-              </Button>
+              <button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} className="rounded-full p-2 hover:bg-muted transition-colors"><Globe className="w-4 h-4" /></button>
+              <Button variant="ghost" size="icon" className="rounded-full" onClick={handleSignOut}><LogOut className="w-4 h-4" /></Button>
             </>
           ) : (
             <>
-              <button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} className="rounded-full p-2 hover:bg-muted transition-colors">
-                <Globe className="w-4 h-4" />
-              </button>
-              <Link to="/login">
-                <Button variant="ghost" size="sm">
-                  {lang === 'ar' ? 'تسجيل الدخول' : 'Log in'}
-                </Button>
-              </Link>
-              <Link to="/signup">
-                <Button size="sm">
-                  {lang === 'ar' ? 'إنشاء حساب' : 'Sign up'}
-                </Button>
-              </Link>
+              <button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} className="rounded-full p-2 hover:bg-muted transition-colors"><Globe className="w-4 h-4" /></button>
+              <Link to="/login"><Button variant="ghost" size="sm">{lang === 'ar' ? 'تسجيل الدخول' : 'Log in'}</Button></Link>
+              <Link to="/signup"><Button size="sm">{lang === 'ar' ? 'إنشاء حساب' : 'Sign up'}</Button></Link>
             </>
           )}
         </div>
       </header>
 
-      {/* Map section - fills remaining space above card */}
       <div className="flex-1 min-h-0 relative">
-        {step === 'details' && isNearbyMode ? (
-          <MapPinPicker
-            className="h-full w-full"
-            activePin={mapClickTarget === 'pickup' && pickupMode === 'nearby' ? 'origin' : mapClickTarget === 'dropoff' && dropoffMode === 'nearby' ? 'destination' : null}
-            origin={step === 'details' && selectedRide?.routes ? { lat: customPickup?.lat ?? selectedRide.routes.origin_lat, lng: customPickup?.lng ?? selectedRide.routes.origin_lng, name: customPickup?.name ?? (lang === 'ar' ? selectedRide.routes.origin_name_ar : selectedRide.routes.origin_name_en) } : undefined}
-            destination={step === 'details' && selectedRide?.routes ? { lat: customDropoff?.lat ?? selectedRide.routes.destination_lat, lng: customDropoff?.lng ?? selectedRide.routes.destination_lng, name: customDropoff?.name ?? (lang === 'ar' ? selectedRide.routes.destination_name_ar : selectedRide.routes.destination_name_en) } : undefined}
-            onConfirm={(pinType, loc) => handleMapPinConfirm(pinType === 'origin' ? 'pickup' : 'dropoff', loc)}
-            onCancel={() => {
-              if (mapClickTarget === 'pickup') setPickupMode('start');
-              else setDropoffMode('end');
-            }}
-          />
-        ) : (
-          <MapView
-            className="h-full w-full rounded-none"
-            markers={mapMarkers}
-            origin={step === 'details' && selectedRide?.routes ? { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng } : (pickup && dropoff ? pickup : undefined)}
-            destination={step === 'details' && selectedRide?.routes ? { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng } : (pickup && dropoff ? dropoff : undefined)}
-            showDirections={step === 'details' ? !!selectedRide?.routes : (!!pickup && !!dropoff)}
-            center={
-              step === 'details' && selectedRide?.routes && mapClickTarget === 'dropoff' && dropoffMode === 'nearby'
-                ? { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng }
-                : step === 'details' && selectedRide?.routes && mapClickTarget === 'pickup' && pickupMode === 'nearby'
-                ? { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng }
-                : undefined
-            }
-            zoom={12}
-            showUserLocation
-            connectionLine={
-              nearestRoutePoint && (customPickup || customDropoff)
-                ? {
-                    from: (customPickup && pickupMode === 'nearby' ? customPickup : customDropoff) || { lat: 0, lng: 0 },
-                    to: nearestRoutePoint,
-                    color: (pickupResult?.ok === false || dropoffResult?.ok === false) ? '#EF4444' : '#22C55E',
-                  }
-                : null
-            }
-          />
-        )}
+        <MapView
+          className="h-full w-full rounded-none"
+          markers={mapMarkers}
+          origin={step === 'details' && selectedRide?.routes ? { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng } : (pickup && dropoff ? pickup : undefined)}
+          destination={step === 'details' && selectedRide?.routes ? { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng } : (pickup && dropoff ? dropoff : undefined)}
+          showDirections={step === 'details' ? !!selectedRide?.routes : (!!pickup && !!dropoff)}
+          zoom={12}
+          showUserLocation
+        />
       </div>
 
-      {/* Bottom card - full width */}
       <div className="shrink-0 max-h-[45vh] overflow-y-auto bg-card border-t border-border pb-16">
         {step === 'search' && (
           <div className="p-4 space-y-4">
-            <h2 className="text-lg font-bold text-foreground">
-              {lang === 'ar' ? 'إلى أين تريد الذهاب؟' : 'Where are you going?'}
-            </h2>
-
-            {/* Pickup */}
+            <h2 className="text-lg font-bold text-foreground">{lang === 'ar' ? 'إلى أين تريد الذهاب؟' : 'Where are you going?'}</h2>
             <div className="space-y-2">
-              <PlacesAutocomplete
-                placeholder={lang === 'ar' ? 'من أين؟ (نقطة الركوب)' : 'From where? (Pickup)'}
-                onSelect={(place) => setPickup(place)}
-                value={pickup?.name || ''}
-                iconColor="text-green-500"
-              />
-              <PlacesAutocomplete
-                placeholder={lang === 'ar' ? 'إلى أين؟ (نقطة النزول)' : 'To where? (Dropoff)'}
-                onSelect={(place) => setDropoff(place)}
-                value={dropoff?.name || ''}
-                iconColor="text-destructive"
-              />
+              <PlacesAutocomplete placeholder={lang === 'ar' ? 'من أين؟ (نقطة الركوب)' : 'From where? (Pickup)'} onSelect={(place) => setPickup(place)} value={pickup?.name || ''} iconColor="text-green-500" />
+              <PlacesAutocomplete placeholder={lang === 'ar' ? 'إلى أين؟ (نقطة النزول)' : 'To where? (Dropoff)'} onSelect={(place) => setDropoff(place)} value={dropoff?.name || ''} iconColor="text-destructive" />
             </div>
-
-            {/* Date selector */}
             <div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {dateOptions.slice(0, 5).map((opt) => (
                   <button key={opt.date} onClick={() => setSelectedDate(opt.date)}
-                    className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap border transition-colors ${
-                      selectedDate === opt.date
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-card text-muted-foreground border-border hover:border-primary/50'
-                    }`}>
+                    className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap border transition-colors ${selectedDate === opt.date ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:border-primary/50'}`}>
                     {opt.label}
                   </button>
                 ))}
               </div>
             </div>
-
-            {/* Estimated price */}
             {estimatedPrice && (
               <div className="flex items-center justify-between bg-surface rounded-xl p-3">
                 <span className="text-sm text-muted-foreground">{lang === 'ar' ? 'السعر المقدّر' : 'Estimated price'}</span>
                 <span className="text-lg font-bold text-primary">{estimatedPrice} EGP</span>
               </div>
             )}
-
-            {/* Search button */}
-            <Button className="w-full h-12 text-base rounded-xl" onClick={searchRides}
-              disabled={!pickup || !dropoff || loadingRides}>
-              {loadingRides ? (
-                <><Loader2 className="w-4 h-4 me-2 animate-spin" />{lang === 'ar' ? 'جاري البحث...' : 'Searching...'}</>
-              ) : (
-                lang === 'ar' ? 'ابحث عن رحلة' : 'Search Rides'
-              )}
+            <Button className="w-full h-12 text-base rounded-xl" onClick={searchRides} disabled={!pickup || !dropoff || loadingRides}>
+              {loadingRides ? (<><Loader2 className="w-4 h-4 me-2 animate-spin" />{lang === 'ar' ? 'جاري البحث...' : 'Searching...'}</>) : (lang === 'ar' ? 'ابحث عن رحلة' : 'Search Rides')}
             </Button>
           </div>
         )}
 
         {step === 'results' && (
           <div className="p-4 space-y-3">
-            <h2 className="text-lg font-bold text-foreground">
-              {lang === 'ar' ? 'الرحلات المتاحة' : 'Available Rides'}
-            </h2>
-
+            <h2 className="text-lg font-bold text-foreground">{lang === 'ar' ? 'الرحلات المتاحة' : 'Available Rides'}</h2>
             {loadingRides ? (
-              <div className="p-8 text-center text-muted-foreground">
-                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-                {lang === 'ar' ? 'جاري البحث...' : 'Searching...'}
-              </div>
+              <div className="p-8 text-center text-muted-foreground"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />{lang === 'ar' ? 'جاري البحث...' : 'Searching...'}</div>
             ) : rideInstances.length > 0 ? (
               <div className="space-y-2">
                 {rideInstances.map((ride) => (
-                  <button key={ride.id} onClick={() => selectRide(ride)}
-                    className="w-full text-start bg-card border border-border rounded-xl p-4 hover:border-secondary/40 hover:shadow-card-hover transition-all">
+                  <button key={ride.id} onClick={() => selectRide(ride)} className="w-full text-start bg-card border border-border rounded-xl p-4 hover:border-secondary/40 hover:shadow-card-hover transition-all">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">
-                        {ride.driver_profile?.avatar_url ? (
-                          <img src={ride.driver_profile.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
-                        ) : (
-                          <UserIcon className="w-5 h-5 text-primary" />
-                        )}
+                        {ride.driver_profile?.avatar_url ? (<img src={ride.driver_profile.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />) : (<UserIcon className="w-5 h-5 text-primary" />)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground text-sm truncate">
-                          {ride.driver_profile?.full_name || (lang === 'ar' ? 'سائق' : 'Driver')}
-                        </p>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Car className="w-3 h-3" />
-                          <span>{ride.shuttle_info?.vehicle_model}</span>
-                        </div>
+                        <p className="font-medium text-foreground text-sm truncate">{ride.driver_profile?.full_name || (lang === 'ar' ? 'سائق' : 'Driver')}</p>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground"><Car className="w-3 h-3" /><span>{ride.shuttle_info?.vehicle_model}</span></div>
                       </div>
-                      <div className="text-end">
-                        <span className="text-lg font-bold text-primary">
-                          {estimatedPrice ?? '...'} EGP
-                        </span>
-                      </div>
+                      <div className="text-end"><span className="text-lg font-bold text-primary">{ride.routes?.price ?? '...'} EGP</span></div>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                       <MapPin className="w-3 h-3 text-green-500 shrink-0" />
-                      <span className="flex-1 break-words">
-                        {ride.direction === 'return'
-                          ? (lang === 'ar' ? ride.routes?.destination_name_ar : ride.routes?.destination_name_en)
-                          : (lang === 'ar' ? ride.routes?.origin_name_ar : ride.routes?.origin_name_en)}
-                      </span>
+                      <span className="flex-1 break-words">{ride.direction === 'return' ? (lang === 'ar' ? ride.routes?.destination_name_ar : ride.routes?.destination_name_en) : (lang === 'ar' ? ride.routes?.origin_name_ar : ride.routes?.origin_name_en)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                       <MapPin className="w-3 h-3 text-destructive shrink-0" />
-                      <span className="flex-1 break-words">
-                        {ride.direction === 'return'
-                          ? (lang === 'ar' ? ride.routes?.origin_name_ar : ride.routes?.origin_name_en)
-                          : (lang === 'ar' ? ride.routes?.destination_name_ar : ride.routes?.destination_name_en)}
-                      </span>
+                      <span className="flex-1 break-words">{ride.direction === 'return' ? (lang === 'ar' ? ride.routes?.origin_name_ar : ride.routes?.origin_name_en) : (lang === 'ar' ? ride.routes?.destination_name_ar : ride.routes?.destination_name_en)}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-2 text-xs">
-                      <span className="flex items-center gap-1 text-muted-foreground">
-                        <Clock className="w-3 h-3" />{ride.departure_time?.slice(0, 5)}
-                      </span>
-                      <span className={`flex items-center gap-1 font-medium ${ride.available_seats <= 3 ? 'text-destructive' : 'text-green-600'}`}>
-                        <Users className="w-3 h-3" />
-                        {ride.available_seats}/{ride.total_seats}
-                      </span>
-                      {ride.direction === 'return' && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium text-[10px]">
-                          {lang === 'ar' ? 'عودة' : 'Return'}
-                        </span>
-                      )}
+                      <span className="flex items-center gap-1 text-muted-foreground"><Clock className="w-3 h-3" />{ride.departure_time?.slice(0, 5)}</span>
+                      <span className={`flex items-center gap-1 font-medium ${ride.available_seats <= 3 ? 'text-destructive' : 'text-green-600'}`}><Users className="w-3 h-3" />{ride.available_seats}/{ride.total_seats}</span>
+                      {ride.direction === 'return' && (<span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium text-[10px]">{lang === 'ar' ? 'عودة' : 'Return'}</span>)}
                     </div>
                   </button>
                 ))}
@@ -965,17 +753,10 @@ const Dashboard = () => {
             ) : (
               <div className="p-8 text-center">
                 <Calendar className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm mb-3">
-                  {lang === 'ar' ? 'لا توجد رحلات متاحة لهذا المسار' : 'No rides available for this route'}
-                </p>
+                <p className="text-muted-foreground text-sm mb-3">{lang === 'ar' ? 'لا توجد رحلات متاحة لهذا المسار' : 'No rides available for this route'}</p>
                 <Button size="sm" onClick={() => {
                   if (!user) { navigate('/login'); return; }
-                  navigate('/request-route', {
-                    state: {
-                      origin: pickup ? { name: pickup.name || '', lat: pickup.lat, lng: pickup.lng } : undefined,
-                      destination: dropoff ? { name: dropoff.name || '', lat: dropoff.lat, lng: dropoff.lng } : undefined,
-                    }
-                  });
+                  navigate('/request-route', { state: { origin: pickup ? { name: pickup.name || '', lat: pickup.lat, lng: pickup.lng } : undefined, destination: dropoff ? { name: dropoff.name || '', lat: dropoff.lat, lng: dropoff.lng } : undefined } });
                 }}>{lang === 'ar' ? 'اطلب هذا المسار' : 'Request this route'}</Button>
               </div>
             )}
@@ -984,21 +765,13 @@ const Dashboard = () => {
 
         {step === 'details' && selectedRide && (
           <div className="p-4 space-y-4">
-            {/* Driver & Vehicle */}
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">
-                {driverProfile?.avatar_url ? (
-                  <img src={driverProfile.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover" />
-                ) : (
-                  <UserIcon className="w-6 h-6 text-primary" />
-                )}
+                {driverProfile?.avatar_url ? (<img src={driverProfile.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover" />) : (<UserIcon className="w-6 h-6 text-primary" />)}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-foreground">{driverProfile?.full_name || (lang === 'ar' ? 'سائق' : 'Driver')}</h3>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Car className="w-3 h-3" />
-                  <span>{shuttleInfo?.vehicle_model} · {shuttleInfo?.vehicle_plate}</span>
-                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground"><Car className="w-3 h-3" /><span>{shuttleInfo?.vehicle_model} · {shuttleInfo?.vehicle_plate}</span></div>
               </div>
               <div className="text-end">
                 <p className="text-xl font-bold text-primary">{dynamicPrice} EGP</p>
@@ -1006,16 +779,12 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Saved locations */}
             {savedLocations.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <History className="w-3 h-3" />{lang === 'ar' ? 'مواقع سابقة' : 'Previous'}
-                </p>
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1"><History className="w-3 h-3" />{lang === 'ar' ? 'مواقع سابقة' : 'Previous'}</p>
                 <div className="flex gap-2 overflow-x-auto">
-                  {savedLocations.slice(0, 3).map(sl => (
-                    <button key={sl.id} onClick={() => applySavedLocation(sl)}
-                      className="bg-surface hover:bg-muted rounded-lg px-3 py-1.5 text-[10px] border border-border whitespace-nowrap">
+                  {savedLocations.slice(0, 3).map((sl: any) => (
+                    <button key={sl.id} onClick={() => applySavedLocation(sl)} className="bg-surface hover:bg-muted rounded-lg px-3 py-1.5 text-[10px] border border-border whitespace-nowrap">
                       {sl.pickup_name?.split(',')[0]} → {sl.dropoff_name?.split(',')[0]}
                     </button>
                   ))}
@@ -1023,42 +792,35 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* Pickup & Dropoff */}
-            {renderPointSelector('pickup', pickupMode, setPickupMode, customPickup, validatingPickup, pickupResult)}
-            {renderPointSelector('dropoff', dropoffMode, setDropoffMode, customDropoff, validatingDropoff, dropoffResult)}
+            {renderStopSelector('pickup')}
+            {renderStopSelector('dropoff')}
 
-            {/* Trip Direction */}
-            <div className="grid grid-cols-3 gap-2">
-              {([
-                { value: 'go' as const, labelAr: 'ذهاب', labelEn: 'Going', mult: 1 },
-                { value: 'return' as const, labelAr: 'عودة', labelEn: 'Return', mult: 1 },
-                { value: 'both' as const, labelAr: 'ذهاب وعودة', labelEn: 'Round Trip', mult: 2 },
-              ]).map(opt => (
-                <button key={opt.value} onClick={() => setTripDirection(opt.value)}
-                  className={`px-2 py-2.5 rounded-xl text-center border-2 transition-colors ${
-                    tripDirection === opt.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:border-primary/50'
-                  }`}>
-                  <p className="text-xs font-medium">{lang === 'ar' ? opt.labelAr : opt.labelEn}</p>
-                  <p className="text-[10px] mt-0.5 opacity-80">{dynamicPrice * opt.mult} EGP</p>
-                </button>
-              ))}
-            </div>
+            {tripDirectionOptions.length > 1 && (
+              <div className={`grid gap-2 ${tripDirectionOptions.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                {tripDirectionOptions.map(opt => (
+                  <button key={opt.value} onClick={() => setTripDirection(opt.value)}
+                    className={`px-2 py-2.5 rounded-xl text-center border-2 transition-colors ${tripDirection === opt.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:border-primary/50'}`}>
+                    <p className="text-xs font-medium">{lang === 'ar' ? opt.labelAr : opt.labelEn}</p>
+                    <p className="text-[10px] mt-0.5 opacity-80">{dynamicPrice * opt.mult} EGP</p>
+                  </button>
+                ))}
+              </div>
+            )}
+            {tripDirectionOptions.length === 1 && (
+              <div className="flex items-center gap-2 text-xs p-3 rounded-xl bg-surface border border-border">
+                <ArrowRight className="w-4 h-4 text-primary" />
+                <span className="font-medium text-foreground">{lang === 'ar' ? tripDirectionOptions[0].labelAr : tripDirectionOptions[0].labelEn}</span>
+                <span className="ms-auto font-bold text-primary">{dynamicPrice} EGP</span>
+              </div>
+            )}
 
-            {/* Active Bundle */}
             {activeBundlePurchase && (
-              <button
-                onClick={() => setUseBundle(!useBundle)}
-                className={`w-full px-4 py-3 rounded-xl text-sm font-medium border-2 transition-colors flex items-center gap-2 ${
-                  useBundle ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-card text-foreground border-border hover:border-secondary'
-                }`}>
+              <button onClick={() => setUseBundle(!useBundle)} className={`w-full px-4 py-3 rounded-xl text-sm font-medium border-2 transition-colors flex items-center gap-2 ${useBundle ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-card text-foreground border-border hover:border-secondary'}`}>
                 <Package className="w-4 h-4" />
-                {useBundle
-                  ? (lang === 'ar' ? `✓ من الباقة (${activeBundlePurchase.rides_remaining} متبقي)` : `✓ Using bundle (${activeBundlePurchase.rides_remaining} left)`)
-                  : (lang === 'ar' ? `استخدم الباقة (${activeBundlePurchase.rides_remaining} متبقي)` : `Use bundle (${activeBundlePurchase.rides_remaining} left)`)}
+                {useBundle ? (lang === 'ar' ? `✓ من الباقة (${activeBundlePurchase.rides_remaining} متبقي)` : `✓ Using bundle (${activeBundlePurchase.rides_remaining} left)`) : (lang === 'ar' ? `استخدم الباقة (${activeBundlePurchase.rides_remaining} متبقي)` : `Use bundle (${activeBundlePurchase.rides_remaining} left)`)}
               </button>
             )}
 
-            {/* Payment */}
             {!useBundle && (
               <div className="space-y-3">
                 <div className="bg-surface rounded-xl p-3 text-sm space-y-1">
@@ -1070,13 +832,10 @@ const Dashboard = () => {
                 {paymentPreview ? (
                   <div className="space-y-2">
                     <img src={paymentPreview} alt="" className="w-full h-32 object-contain rounded-lg border border-border bg-muted" />
-                    <Button variant="outline" size="sm" className="w-full" onClick={() => fileInputRef.current?.click()}>
-                      <Upload className="w-3 h-3 me-1" />{lang === 'ar' ? 'تغيير' : 'Change'}
-                    </Button>
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => fileInputRef.current?.click()}><Upload className="w-3 h-3 me-1" />{lang === 'ar' ? 'تغيير' : 'Change'}</Button>
                   </div>
                 ) : (
-                  <Button variant="outline" className="w-full h-16 border-dashed border-2 flex-col gap-1"
-                    onClick={() => fileInputRef.current?.click()}>
+                  <Button variant="outline" className="w-full h-16 border-dashed border-2 flex-col gap-1" onClick={() => fileInputRef.current?.click()}>
                     <Upload className="w-5 h-5 text-muted-foreground" />
                     <span className="text-xs text-muted-foreground">{lang === 'ar' ? 'ارفع إثبات InstaPay' : 'Upload InstaPay proof'}</span>
                   </Button>
@@ -1084,33 +843,20 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* Book button */}
             {!isRideFull ? (
-              <Button className="w-full h-12 text-base rounded-xl" onClick={() => handleBook(false)}
-                disabled={loading || !isPickupValid || !isDropoffValid || (!useBundle && !paymentProof)}>
-                {loading ? (
-                  <><Loader2 className="w-4 h-4 me-1 animate-spin" />{lang === 'ar' ? 'جاري الحجز...' : 'Booking...'}</>
-                ) : (
-                  lang === 'ar' ? `تأكيد الحجز · ${tripDirection === 'both' ? dynamicPrice * 2 : dynamicPrice} EGP` : `Confirm · ${tripDirection === 'both' ? dynamicPrice * 2 : dynamicPrice} EGP`
-                )}
+              <Button className="w-full h-12 text-base rounded-xl" onClick={() => handleBook(false)} disabled={loading || (!useBundle && !paymentProof)}>
+                {loading ? (<><Loader2 className="w-4 h-4 me-1 animate-spin" />{lang === 'ar' ? 'جاري الحجز...' : 'Booking...'}</>) : (lang === 'ar' ? `تأكيد الحجز · ${tripDirection === 'both' ? dynamicPrice * 2 : dynamicPrice} EGP` : `Confirm · ${tripDirection === 'both' ? dynamicPrice * 2 : dynamicPrice} EGP`)}
               </Button>
             ) : (
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-destructive font-medium p-2 bg-destructive/10 rounded-lg">
-                  <AlertCircle className="w-3 h-3" />{lang === 'ar' ? 'مكتمل' : 'Full'}
-                </div>
-                <Button className="w-full" variant="secondary" onClick={() => handleBook(true)}
-                  disabled={loading || !isPickupValid || !isDropoffValid}>
-                  <ListOrdered className="w-4 h-4 me-1" />
-                  {lang === 'ar' ? 'قائمة الانتظار' : 'Join Waitlist'}
-                </Button>
+                <div className="flex items-center gap-2 text-xs text-destructive font-medium p-2 bg-destructive/10 rounded-lg"><AlertCircle className="w-3 h-3" />{lang === 'ar' ? 'مكتمل' : 'Full'}</div>
+                <Button className="w-full" variant="secondary" onClick={() => handleBook(true)} disabled={loading}><ListOrdered className="w-4 h-4 me-1" />{lang === 'ar' ? 'قائمة الانتظار' : 'Join Waitlist'}</Button>
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Bottom nav */}
       <BottomNav />
     </div>
   );
