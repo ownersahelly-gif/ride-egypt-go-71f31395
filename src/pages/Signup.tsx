@@ -439,14 +439,7 @@ const Signup = () => {
           accepted_terms_at: new Date().toISOString(),
         }).eq('user_id', userId);
 
-        // Track referral if present
-        if (referralCode) {
-          const { data: partner } = await supabase.from('partner_companies').select('id').eq('referral_code', referralCode).eq('status', 'approved').single();
-          if (partner) {
-            await supabase.from('profiles').update({ referred_by_partner_id: partner.id }).eq('user_id', userId);
-            await supabase.from('partner_referrals').insert({ partner_id: partner.id, referred_user_id: userId, referral_code_used: referralCode });
-          }
-        }
+        // Drivers don't use referral codes
 
         // Upload all documents
         const uploads = await Promise.all([
