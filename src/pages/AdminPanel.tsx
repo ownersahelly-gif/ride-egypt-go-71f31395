@@ -75,6 +75,12 @@ const AdminPanel = () => {
   const [refundProfiles, setRefundProfiles] = useState<Record<string, any>>({});
   const [processingRefund, setProcessingRefund] = useState<string | null>(null);
 
+  // Partner/Earnings management
+  const [partnerCompanies, setPartnerCompanies] = useState<any[]>([]);
+  const [platformEarnings, setPlatformEarnings] = useState<any[]>([]);
+  const [partnerRouteRequests, setPartnerRouteRequests] = useState<any[]>([]);
+  const [partnerProfiles, setPartnerProfiles] = useState<Record<string, any>>({});
+
   // User filters
   const [userTypeFilter, setUserTypeFilter] = useState('all');
   const [userTimeFilter, setUserTimeFilter] = useState('all');
