@@ -618,7 +618,7 @@ const DriverDashboard = () => {
                     return a.time.localeCompare(b.time);
                   });
 
-                  const displaySlots = showAllUpcoming ? tripSlots : tripSlots.slice(0, 4);
+                  const displaySlots = showAllUpcoming ? tripSlots : tripSlots.slice(0, 2);
                   const routeIds = [...new Set(driverSchedules.map(s => s.route_id).filter(Boolean))];
                   const firstTodayTrip = tripSlots.find(slot => slot.dayOffset === 0) || null;
 
