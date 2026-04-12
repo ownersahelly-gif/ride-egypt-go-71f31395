@@ -239,6 +239,14 @@ const BookRide = () => {
     if (!ri.routes) return false;
     if (searchPickup && !smartMatchRoute(searchPickup, ri)) return false;
     if (searchDropoff && !smartMatchRoute(searchDropoff, ri)) return false;
+    // Hide rides whose departure time has already passed (today only)
+    const today = new Date().toISOString().split('T')[0];
+    if (ri.ride_date === today && ri.departure_time) {
+      const [hh, mm] = ri.departure_time.split(':').map(Number);
+      const dep = new Date();
+      dep.setHours(hh, mm, 0, 0);
+      if (Date.now() > dep.getTime()) return false;
+    }
     return true;
   });
 
@@ -316,7 +324,11 @@ const BookRide = () => {
 
   // --- Booking ---
   const handleBook = async (asWaitlist = false) => {
-    if (!user || !selectedRide) return;
+    if (!user) {
+      navigate('/signup');
+      return;
+    }
+    if (!selectedRide) return;
     if (!isPickupValid || !isDropoffValid) {
       toast({ title: lang === 'ar' ? 'اختر نقاط الركوب والنزول' : 'Select pickup & dropoff', variant: 'destructive' });
       return;
