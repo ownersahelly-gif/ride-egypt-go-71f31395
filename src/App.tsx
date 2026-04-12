@@ -25,6 +25,7 @@ import CarpoolVerify from "./pages/CarpoolVerify.tsx";
 import CarpoolPost from "./pages/CarpoolPost.tsx";
 import CarpoolRoute from "./pages/CarpoolRoute.tsx";
 import CarpoolManage from "./pages/CarpoolManage.tsx";
+import Wallet from "./pages/Wallet.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import GlobalNotifications from "./components/GlobalNotifications";
 
@@ -49,6 +50,7 @@ const App = () => (
               <Route path="/my-bookings" element={<ProtectedRoute><MyBookings /></ProtectedRoute>} />
               <Route path="/request-route" element={<ProtectedRoute><RequestRoute /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
               <Route path="/driver-apply" element={<ProtectedRoute><DriverApply /></ProtectedRoute>} />
               <Route path="/driver-dashboard" element={<ProtectedRoute><DriverDashboard /></ProtectedRoute>} />
               <Route path="/track" element={<ProtectedRoute><TrackShuttle /></ProtectedRoute>} />

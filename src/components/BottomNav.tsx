@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Ticket, Route, User, Car } from 'lucide-react';
+import { Home, Ticket, Route, User, Car, Wallet } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 const BottomNav = () => {
@@ -10,8 +10,8 @@ const BottomNav = () => {
   const tabs = [
     { path: '/dashboard', icon: Home, labelEn: 'Home', labelAr: 'الرئيسية' },
     { path: '/my-bookings', icon: Ticket, labelEn: 'Bookings', labelAr: 'حجوزاتي' },
+    { path: '/wallet', icon: Wallet, labelEn: 'Wallet', labelAr: 'المحفظة' },
     { path: '/carpool', icon: Car, labelEn: 'Carpool', labelAr: 'مشاركة' },
-    { path: '/request-route', icon: Route, labelEn: 'Request', labelAr: 'طلب مسار' },
     { path: '/profile', icon: User, labelEn: 'Profile', labelAr: 'حسابي' },
   ];
 

@@ -14,11 +14,11 @@ import PlacesAutocomplete from '@/components/PlacesAutocomplete';
 import {
   ChevronLeft, Route, Users, Car, Ticket, BarChart3, Plus, Edit, Trash2,
   CheckCircle2, XCircle, MapPin, Clock, Search, Globe, LogOut, Shield,
-  Loader2, Eye, Database, Settings, Phone, Package, ListOrdered
+  Loader2, Eye, Database, Settings, Phone, Package, ListOrdered, RotateCcw
 } from 'lucide-react';
 import PackagePricing from '@/components/admin/PackagePricing';
 
-type AdminTab = 'routes' | 'drivers' | 'shuttles' | 'bookings' | 'analytics' | 'approvals' | 'settings' | 'carpool' | 'users' | 'route_requests' | 'packages' | 'content';
+type AdminTab = 'routes' | 'drivers' | 'shuttles' | 'bookings' | 'analytics' | 'approvals' | 'settings' | 'carpool' | 'users' | 'route_requests' | 'packages' | 'content' | 'refunds';
 
 const AdminPanel = () => {
   const { user, signOut } = useAuth();
@@ -68,6 +68,11 @@ const AdminPanel = () => {
   // Content settings
   const [contentSettings, setContentSettings] = useState<Record<string, string>>({});
   const [savingContent, setSavingContent] = useState(false);
+
+  // Refund management
+  const [refunds, setRefunds] = useState<any[]>([]);
+  const [refundProfiles, setRefundProfiles] = useState<Record<string, any>>({});
+  const [processingRefund, setProcessingRefund] = useState<string | null>(null);
 
   // User filters
   const [userTypeFilter, setUserTypeFilter] = useState('all');
@@ -181,6 +186,16 @@ const AdminPanel = () => {
       activeDrivers: (shuttlesRes.data || []).filter(s => s.status === 'active').length,
       pendingApps: (appsRes.data || []).filter(a => a.status === 'pending').length,
     });
+    // Fetch refunds
+    const { data: refundsData } = await supabase.from('refunds').select('*').order('created_at', { ascending: false });
+    setRefunds(refundsData || []);
+    const refundUserIds = [...new Set((refundsData || []).map((r: any) => r.user_id))];
+    if (refundUserIds.length > 0) {
+      const rpMap: Record<string, any> = {};
+      (profilesRes.data || []).filter((p: any) => refundUserIds.includes(p.user_id)).forEach((p: any) => { rpMap[p.user_id] = p; });
+      setRefundProfiles(rpMap);
+    }
+
     setLoading(false);
   };
 
@@ -549,6 +564,7 @@ const AdminPanel = () => {
     { key: 'drivers', icon: Users, label: lang === 'ar' ? 'السائقين' : 'Drivers' },
     { key: 'shuttles', icon: Car, label: lang === 'ar' ? 'الشاتلات' : 'Shuttles' },
     { key: 'bookings', icon: Ticket, label: lang === 'ar' ? 'الحجوزات' : 'Bookings' },
+    { key: 'refunds', icon: RotateCcw, label: lang === 'ar' ? 'المبالغ المستردة' : 'Refunds' },
     { key: 'users', icon: Users, label: lang === 'ar' ? 'المستخدمين' : 'Users' },
     { key: 'route_requests', icon: MapPin, label: lang === 'ar' ? 'طلبات المسارات' : 'Route Requests' },
     { key: 'content', icon: Globe, label: lang === 'ar' ? 'المحتوى' : 'Content' },
@@ -1749,6 +1765,132 @@ const AdminPanel = () => {
                           {rr.preferred_days.map((d: number) => (
                             <span key={d} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{dayLabels[d]}</span>
                           ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Refunds Tab */}
+        {tab === 'refunds' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-foreground">{lang === 'ar' ? 'إدارة المبالغ المستردة' : 'Refund Management'}</h2>
+              <button
+                onClick={async () => {
+                  // Auto-detect refundable bookings: paid bookings with cancelled/deleted trips
+                  const { data: cancelledBookings } = await supabase
+                    .from('bookings')
+                    .select('*, routes(name_en, name_ar)')
+                    .in('status', ['cancelled'])
+                    .not('payment_proof_url', 'is', null)
+                    .order('created_at', { ascending: false });
+                  
+                  const existingBookingIds = refunds.map(r => r.booking_id);
+                  const newRefundable = (cancelledBookings || []).filter(b => !existingBookingIds.includes(b.id));
+                  
+                  if (newRefundable.length === 0) {
+                    toast.info(lang === 'ar' ? 'لا توجد حجوزات جديدة تستحق الاسترداد' : 'No new refundable bookings found');
+                    return;
+                  }
+                  
+                  for (const b of newRefundable) {
+                    await supabase.from('refunds').insert({
+                      booking_id: b.id,
+                      user_id: b.user_id,
+                      amount: Number(b.total_price || 0),
+                      reason: lang === 'ar' ? 'رحلة ملغاة - دفع مؤكد' : 'Cancelled trip - payment confirmed',
+                      status: 'pending',
+                      refund_type: 'pending',
+                    });
+                  }
+                  toast.success(`${newRefundable.length} ${lang === 'ar' ? 'استرداد جديد' : 'new refunds detected'}`);
+                  fetchAllData();
+                }}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                {lang === 'ar' ? 'كشف تلقائي' : 'Auto-detect Refunds'}
+              </button>
+            </div>
+
+            {refunds.length === 0 ? (
+              <div className="bg-card border border-border rounded-2xl p-8 text-center">
+                <RotateCcw className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground">{lang === 'ar' ? 'لا توجد طلبات استرداد' : 'No refund requests'}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {refunds.map(r => {
+                  const profile = refundProfiles[r.user_id];
+                  return (
+                    <div key={r.id} className="bg-card border border-border rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-foreground">{profile?.full_name || r.user_id.slice(0, 8)}</p>
+                          {profile?.phone && <p className="text-xs text-muted-foreground">{profile.phone}</p>}
+                        </div>
+                        <div className="text-end">
+                          <p className="font-bold text-lg text-foreground">{r.amount} EGP</p>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            r.status === 'processed' ? 'bg-green-100 text-green-700' :
+                            r.status === 'credited' ? 'bg-blue-100 text-blue-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>
+                            {r.status === 'processed' ? (lang === 'ar' ? 'تم الاسترداد' : 'Processed') :
+                             r.status === 'credited' ? (lang === 'ar' ? 'أُضيف للرصيد' : 'Credited') :
+                             (lang === 'ar' ? 'قيد المراجعة' : 'Pending')}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{r.reason}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</p>
+                      
+                      {r.status === 'pending' && (
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            disabled={processingRefund === r.id}
+                            onClick={async () => {
+                              setProcessingRefund(r.id);
+                              await supabase.from('refunds').update({
+                                status: 'processed',
+                                refund_type: 'cash',
+                                processed_by: user?.id,
+                                processed_at: new Date().toISOString(),
+                              }).eq('id', r.id);
+                              toast.success(lang === 'ar' ? 'تم تحديد كمسترد' : 'Marked as refunded');
+                              setProcessingRefund(null);
+                              fetchAllData();
+                            }}
+                            className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+                          >
+                            {lang === 'ar' ? 'تم الاسترداد نقداً' : 'Mark Refunded (Cash)'}
+                          </button>
+                          <button
+                            disabled={processingRefund === r.id}
+                            onClick={async () => {
+                              setProcessingRefund(r.id);
+                              // Add to wallet balance
+                              const { data: userProfile } = await supabase.from('profiles').select('wallet_balance').eq('user_id', r.user_id).single();
+                              const currentBalance = Number(userProfile?.wallet_balance || 0);
+                              await supabase.from('profiles').update({ wallet_balance: currentBalance + Number(r.amount) }).eq('user_id', r.user_id);
+                              await supabase.from('refunds').update({
+                                status: 'credited',
+                                refund_type: 'wallet_credit',
+                                processed_by: user?.id,
+                                processed_at: new Date().toISOString(),
+                              }).eq('id', r.id);
+                              toast.success(lang === 'ar' ? 'تمت إضافة المبلغ للمحفظة' : 'Added to wallet balance');
+                              setProcessingRefund(null);
+                              fetchAllData();
+                            }}
+                            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                          >
+                            {lang === 'ar' ? 'أضف للمحفظة' : 'Add to Wallet'}
+                          </button>
                         </div>
                       )}
                     </div>
