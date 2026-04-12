@@ -604,8 +604,15 @@ const ActiveRide = () => {
       await supabase.from('shuttles').update({ status: 'inactive' }).eq('id', shuttle.id);
     }
     setBookings(prev => prev.map(b => b.status === 'boarded' ? { ...b, status: 'completed', dropped_off_at: now } : b));
-    toast({ title: lang === 'ar' ? 'تم إنهاء الرحلة ✓' : 'Ride completed! ✓' });
+    setShowEndRideDialog(false);
+    setShowEarningsSummary(true);
   };
+
+  // Earnings calculation
+  const totalEarnings = bookings.filter(b => b.status === 'completed').reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
+  const cashEarnings = bookings.filter(b => b.status === 'completed' && !b.payment_proof_url).reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
+  const onlineEarnings = bookings.filter(b => b.status === 'completed' && b.payment_proof_url).reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
+  const completedCount = bookings.filter(b => b.status === 'completed').length;
 
   // IDs of stops that actually have booked passengers
   const bookedStopIds = new Set<string>();
