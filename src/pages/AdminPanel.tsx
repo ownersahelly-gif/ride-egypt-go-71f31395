@@ -15,11 +15,11 @@ import {
   ChevronLeft, Route, Users, Car, Ticket, BarChart3, Plus, Edit, Trash2,
   CheckCircle2, XCircle, MapPin, Clock, Search, Globe, LogOut, Shield,
   Loader2, Eye, Database, Settings, Phone, Package, ListOrdered, RotateCcw,
-  Building2, DollarSign, Link2
+  Building2, DollarSign, Link2, ChevronDown, ChevronUp, MessageSquare
 } from 'lucide-react';
 import PackagePricing from '@/components/admin/PackagePricing';
 
-type AdminTab = 'routes' | 'drivers' | 'shuttles' | 'bookings' | 'analytics' | 'approvals' | 'settings' | 'carpool' | 'users' | 'route_requests' | 'packages' | 'content' | 'refunds' | 'earnings' | 'partners' | 'partner_routes';
+type AdminTab = 'routes' | 'drivers' | 'shuttles' | 'bookings' | 'analytics' | 'approvals' | 'settings' | 'carpool' | 'users' | 'route_requests' | 'packages' | 'content' | 'refunds' | 'earnings' | 'partners' | 'partner_routes' | 'partner_packages';
 
 const AdminPanel = () => {
   const { user, signOut } = useAuth();
@@ -80,6 +80,10 @@ const AdminPanel = () => {
   const [platformEarnings, setPlatformEarnings] = useState<any[]>([]);
   const [partnerRouteRequests, setPartnerRouteRequests] = useState<any[]>([]);
   const [partnerProfiles, setPartnerProfiles] = useState<Record<string, any>>({});
+  const [expandedPartnerRoute, setExpandedPartnerRoute] = useState<string | null>(null);
+  const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({});
+  const [showRejectInput, setShowRejectInput] = useState<string | null>(null);
+  const [partnerPackageRequests, setPartnerPackageRequests] = useState<any[]>([]);
 
   // User filters
   const [userTypeFilter, setUserTypeFilter] = useState('all');
@@ -204,14 +208,16 @@ const AdminPanel = () => {
     }
 
     // Fetch partner data
-    const [{ data: partners }, { data: pEarnings }, { data: pRouteReqs }] = await Promise.all([
+    const [{ data: partners }, { data: pEarnings }, { data: pRouteReqs }, { data: pPkgReqs }] = await Promise.all([
       supabase.from('partner_companies').select('*').order('created_at', { ascending: false }),
       supabase.from('platform_earnings').select('*').order('created_at', { ascending: false }).limit(200),
       supabase.from('partner_route_requests').select('*').order('created_at', { ascending: false }),
+      supabase.from('partner_package_requests').select('*').order('created_at', { ascending: false }),
     ]);
     setPartnerCompanies(partners || []);
     setPlatformEarnings(pEarnings || []);
     setPartnerRouteRequests(pRouteReqs || []);
+    setPartnerPackageRequests(pPkgReqs || []);
     // Fetch profiles for partners
     const partnerUserIds = [...new Set((partners || []).map((p: any) => p.user_id))];
     if (partnerUserIds.length > 0) {
@@ -592,6 +598,7 @@ const AdminPanel = () => {
     { key: 'earnings', icon: DollarSign, label: lang === 'ar' ? 'الإيرادات' : 'Earnings' },
     { key: 'partners', icon: Building2, label: lang === 'ar' ? 'الشركاء' : 'Partners' },
     { key: 'partner_routes', icon: Link2, label: lang === 'ar' ? 'مسارات الشركاء' : 'Partner Routes' },
+    { key: 'partner_packages', icon: Package, label: lang === 'ar' ? 'باقات الشركاء' : 'Partner Packages' },
     { key: 'users', icon: Users, label: lang === 'ar' ? 'المستخدمين' : 'Users' },
     { key: 'route_requests', icon: MapPin, label: lang === 'ar' ? 'طلبات المسارات' : 'Route Requests' },
     { key: 'content', icon: Globe, label: lang === 'ar' ? 'المحتوى' : 'Content' },
@@ -2064,64 +2071,292 @@ const AdminPanel = () => {
         {/* Partner Routes Tab */}
         {tab === 'partner_routes' && (
           <div className="space-y-6">
-            <h2 className="text-xl font-bold text-foreground">{lang === 'ar' ? 'مسارات الشركاء' : 'Partner Route Requests'}</h2>
+            <h2 className="text-xl font-bold text-foreground">{lang === 'ar' ? 'طلبات مسارات الشركاء' : 'Partner Route Requests'}</h2>
             {partnerRouteRequests.length === 0 ? (
               <p className="text-muted-foreground">{lang === 'ar' ? 'لا توجد طلبات مسارات من الشركاء' : 'No partner route requests yet'}</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {partnerRouteRequests.map(r => {
                   const partner = partnerCompanies.find((p: any) => p.id === r.partner_id);
                   const stops = Array.isArray(r.stops_json) ? r.stops_json : [];
+                  const isExpanded = expandedPartnerRoute === r.id;
                   return (
-                    <div key={r.id} className="bg-card border border-border rounded-xl p-5 space-y-3">
+                    <div key={r.id} className="bg-card border border-border rounded-xl overflow-hidden">
+                      {/* Header - always visible */}
+                      <button
+                        className="w-full px-5 py-4 flex items-center justify-between text-start hover:bg-muted/30 transition-colors"
+                        onClick={() => setExpandedPartnerRoute(isExpanded ? null : r.id)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-bold text-foreground">{r.name_en}</p>
+                            <span className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 ${
+                              r.status === 'approved' ? 'bg-green-100 text-green-700' :
+                              r.status === 'rejected' ? 'bg-destructive/10 text-destructive' :
+                              r.status === 'draft' ? 'bg-muted text-muted-foreground' :
+                              'bg-amber-100 text-amber-700'
+                            }`}>{r.status}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{r.origin_name} → {r.destination_name} • {r.price} EGP • {r.estimated_duration_minutes} min • {stops.length} stops</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{lang === 'ar' ? 'من' : 'By'}: {partner?.name || 'Unknown'} • {new Date(r.created_at).toLocaleDateString()}</p>
+                        </div>
+                        {isExpanded ? <ChevronUp className="w-5 h-5 text-muted-foreground shrink-0" /> : <ChevronDown className="w-5 h-5 text-muted-foreground shrink-0" />}
+                      </button>
+
+                      {/* Expanded details */}
+                      {isExpanded && (
+                        <div className="px-5 pb-5 space-y-4 border-t border-border pt-4">
+                          {/* Route info grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="bg-muted/50 rounded-lg p-3">
+                              <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'الاسم (EN)' : 'Name (EN)'}</p>
+                              <p className="text-sm font-medium text-foreground">{r.name_en}</p>
+                            </div>
+                            <div className="bg-muted/50 rounded-lg p-3">
+                              <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'الاسم (AR)' : 'Name (AR)'}</p>
+                              <p className="text-sm font-medium text-foreground">{r.name_ar || '—'}</p>
+                            </div>
+                            <div className="bg-muted/50 rounded-lg p-3">
+                              <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'السعر' : 'Price'}</p>
+                              <p className="text-sm font-medium text-foreground">{r.price} EGP</p>
+                            </div>
+                            <div className="bg-muted/50 rounded-lg p-3">
+                              <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'المدة' : 'Duration'}</p>
+                              <p className="text-sm font-medium text-foreground">{r.estimated_duration_minutes} min</p>
+                            </div>
+                          </div>
+
+                          {/* Origin & Destination */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="bg-muted/50 rounded-lg p-3">
+                              <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3 text-green-500" /> {lang === 'ar' ? 'نقطة الانطلاق' : 'Origin'}</p>
+                              <p className="text-sm font-medium text-foreground">{r.origin_name}</p>
+                              <p className="text-xs text-muted-foreground">{r.origin_lat?.toFixed(4)}, {r.origin_lng?.toFixed(4)}</p>
+                            </div>
+                            <div className="bg-muted/50 rounded-lg p-3">
+                              <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3 text-destructive" /> {lang === 'ar' ? 'نقطة الوصول' : 'Destination'}</p>
+                              <p className="text-sm font-medium text-foreground">{r.destination_name}</p>
+                              <p className="text-xs text-muted-foreground">{r.destination_lat?.toFixed(4)}, {r.destination_lng?.toFixed(4)}</p>
+                            </div>
+                          </div>
+
+                          {/* Map */}
+                          <div className="h-[300px] rounded-lg border border-border overflow-hidden">
+                            <MapView
+                              className="h-full w-full"
+                              origin={{ lat: r.origin_lat, lng: r.origin_lng }}
+                              destination={{ lat: r.destination_lat, lng: r.destination_lng }}
+                              showDirections={true}
+                              gestureHandling="cooperative"
+                              waypoints={stops.filter((s: any) => s.lat).map((s: any) => ({ lat: s.lat, lng: s.lng }))}
+                              markers={[
+                                { lat: r.origin_lat, lng: r.origin_lng, label: 'A', color: 'green' },
+                                { lat: r.destination_lat, lng: r.destination_lng, label: 'B', color: 'red' },
+                                ...stops.filter((s: any) => s.lat).map((s: any, i: number) => ({ lat: s.lat, lng: s.lng, label: `${i + 1}`, color: 'blue' as const })),
+                              ]}
+                              showUserLocation={false}
+                            />
+                          </div>
+
+                          {/* Stops list */}
+                          {stops.length > 0 && (
+                            <div>
+                              <p className="text-sm font-medium text-foreground mb-2">{lang === 'ar' ? 'نقاط التوقف' : 'Bus Stops'} ({stops.length})</p>
+                              <div className="space-y-1">
+                                {stops.map((s: any, i: number) => (
+                                  <div key={i} className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+                                    <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-bold shrink-0">{i + 1}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm text-foreground">{s.name_en || s.name || '—'}</p>
+                                      {s.name_ar && <p className="text-xs text-muted-foreground">{s.name_ar}</p>}
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">{s.stop_type || 'both'}</span>
+                                    <span className="text-xs text-muted-foreground">{s.lat?.toFixed(4)}, {s.lng?.toFixed(4)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Admin notes */}
+                          {r.admin_notes && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <p className="text-sm text-amber-800"><strong>{lang === 'ar' ? 'ملاحظات الإدارة' : 'Admin Notes'}:</strong> {r.admin_notes}</p>
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          {r.status === 'pending' && (
+                            <div className="space-y-3">
+                              {showRejectInput === r.id ? (
+                                <div className="space-y-2">
+                                  <Label className="text-sm">{lang === 'ar' ? 'سبب الرفض / ملاحظات للشريك' : 'Rejection reason / Notes for partner'}</Label>
+                                  <textarea
+                                    value={rejectNotes[r.id] || ''}
+                                    onChange={e => setRejectNotes(p => ({ ...p, [r.id]: e.target.value }))}
+                                    className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background min-h-[80px]"
+                                    placeholder={lang === 'ar' ? 'اكتب ملاحظاتك هنا...' : 'Write your notes here...'}
+                                  />
+                                  <div className="flex gap-2">
+                                    <Button variant="outline" onClick={() => setShowRejectInput(null)} className="flex-1">
+                                      {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                                    </Button>
+                                    <Button
+                                      variant="destructive"
+                                      className="flex-1"
+                                      onClick={async () => {
+                                        await supabase.from('partner_route_requests').update({ status: 'rejected', admin_notes: rejectNotes[r.id] || null }).eq('id', r.id);
+                                        toast.success(lang === 'ar' ? 'تم رفض المسار' : 'Route rejected — partner will see your notes');
+                                        setShowRejectInput(null);
+                                        fetchAllData();
+                                      }}
+                                    >
+                                      <XCircle className="w-4 h-4 mr-1" /> {lang === 'ar' ? 'تأكيد الرفض' : 'Confirm Reject'}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <Button
+                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                    onClick={async () => {
+                                      // Approve: create real route + stops
+                                      const { data: newRoute, error: routeErr } = await supabase.from('routes').insert({
+                                        name_en: r.name_en,
+                                        name_ar: r.name_ar || r.name_en,
+                                        origin_name_en: r.origin_name,
+                                        origin_name_ar: r.origin_name,
+                                        origin_lat: r.origin_lat,
+                                        origin_lng: r.origin_lng,
+                                        destination_name_en: r.destination_name,
+                                        destination_name_ar: r.destination_name,
+                                        destination_lat: r.destination_lat,
+                                        destination_lng: r.destination_lng,
+                                        price: r.price,
+                                        estimated_duration_minutes: r.estimated_duration_minutes,
+                                        status: 'active',
+                                      }).select().single();
+                                      
+                                      if (routeErr) {
+                                        toast.error(routeErr.message);
+                                        return;
+                                      }
+
+                                      // Insert stops if any
+                                      if (stops.length > 0 && newRoute) {
+                                        const stopsToInsert = stops.map((s: any, i: number) => ({
+                                          route_id: newRoute.id,
+                                          name_en: s.name_en || s.name || `Stop ${i + 1}`,
+                                          name_ar: s.name_ar || s.name_en || s.name || `محطة ${i + 1}`,
+                                          lat: s.lat,
+                                          lng: s.lng,
+                                          stop_order: i,
+                                          stop_type: s.stop_type || 'both',
+                                        }));
+                                        await supabase.from('stops').insert(stopsToInsert);
+                                      }
+
+                                      await supabase.from('partner_route_requests').update({ status: 'approved' }).eq('id', r.id);
+                                      toast.success(lang === 'ar' ? 'تم قبول المسار وإنشاؤه!' : 'Route approved & created as active route!');
+                                      fetchAllData();
+                                    }}
+                                  >
+                                    <CheckCircle2 className="w-4 h-4 mr-1" /> {lang === 'ar' ? 'قبول وإنشاء المسار' : 'Approve & Create Route'}
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    className="flex-1"
+                                    onClick={() => setShowRejectInput(r.id)}
+                                  >
+                                    <MessageSquare className="w-4 h-4 mr-1" /> {lang === 'ar' ? 'رفض مع ملاحظات' : 'Reject with Notes'}
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Partner Packages Tab */}
+        {tab === 'partner_packages' && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-bold text-foreground">{lang === 'ar' ? 'طلبات باقات الشركاء' : 'Partner Package Requests'}</h2>
+            {partnerPackageRequests.length === 0 ? (
+              <p className="text-muted-foreground">{lang === 'ar' ? 'لا توجد طلبات باقات' : 'No partner package requests yet'}</p>
+            ) : (
+              <div className="space-y-3">
+                {partnerPackageRequests.map((pkg: any) => {
+                  const partner = partnerCompanies.find((p: any) => p.id === pkg.partner_id);
+                  const linkedRoute = partnerRouteRequests.find((r: any) => r.id === pkg.route_request_id);
+                  return (
+                    <div key={pkg.id} className="bg-card border border-border rounded-xl p-5 space-y-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-bold text-foreground">{r.name_en}</p>
-                          {r.name_ar && <p className="text-sm text-muted-foreground">{r.name_ar}</p>}
+                          <p className="font-bold text-foreground">{pkg.package_name_en}</p>
+                          {pkg.package_name_ar && <p className="text-sm text-muted-foreground">{pkg.package_name_ar}</p>}
                           <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'من' : 'By'}: {partner?.name || 'Unknown'}</p>
                         </div>
                         <span className={`text-xs px-2.5 py-1 rounded-full ${
-                          r.status === 'approved' ? 'bg-green-100 text-green-700' :
-                          r.status === 'rejected' ? 'bg-destructive/10 text-destructive' :
+                          pkg.status === 'approved' ? 'bg-green-100 text-green-700' :
+                          pkg.status === 'rejected' ? 'bg-destructive/10 text-destructive' :
                           'bg-amber-100 text-amber-700'
-                        }`}>{r.status}</span>
+                        }`}>{pkg.status}</span>
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        <p>{r.origin_name} → {r.destination_name}</p>
-                        <p>{r.price} EGP • {r.estimated_duration_minutes} min</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-muted/50 rounded-lg p-2 text-center">
+                          <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'رحلات' : 'Rides'}</p>
+                          <p className="text-lg font-bold text-foreground">{pkg.ride_count}</p>
+                        </div>
+                        <div className="bg-muted/50 rounded-lg p-2 text-center">
+                          <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'أيام' : 'Days'}</p>
+                          <p className="text-lg font-bold text-foreground">{pkg.validity_days}</p>
+                        </div>
+                        <div className="bg-muted/50 rounded-lg p-2 text-center">
+                          <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'السعر' : 'Price'}</p>
+                          <p className="text-lg font-bold text-foreground">{pkg.suggested_price} EGP</p>
+                        </div>
                       </div>
-                      {stops.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-foreground">{lang === 'ar' ? 'نقاط التوقف' : 'Stops'}:</p>
-                          {stops.map((s: any, i: number) => (
-                            <p key={i} className="text-xs text-muted-foreground flex items-center gap-1">
-                              <MapPin className="w-3 h-3" /> {s.name}
-                            </p>
-                          ))}
+                      {linkedRoute && (
+                        <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'المسار' : 'Route'}: {linkedRoute.name_en}</p>
+                      )}
+                      {pkg.admin_notes && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                          <p className="text-xs text-amber-800"><strong>Notes:</strong> {pkg.admin_notes}</p>
                         </div>
                       )}
-                      {r.status === 'pending' && (
+                      {pkg.status === 'pending' && (
                         <div className="flex gap-2">
-                          <button
+                          <Button
+                            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                             onClick={async () => {
-                              await supabase.from('partner_route_requests').update({ status: 'approved' }).eq('id', r.id);
-                              toast.success(lang === 'ar' ? 'تم قبول المسار' : 'Route approved');
+                              await supabase.from('partner_package_requests').update({ status: 'approved' }).eq('id', pkg.id);
+                              toast.success(lang === 'ar' ? 'تم قبول الباقة' : 'Package approved');
                               fetchAllData();
                             }}
-                            className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
-                          >{lang === 'ar' ? 'قبول' : 'Approve'}</button>
-                          <button
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1" /> {lang === 'ar' ? 'قبول' : 'Approve'}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            className="flex-1"
                             onClick={async () => {
-                              const notes = prompt(lang === 'ar' ? 'ملاحظات الرفض (اختياري)' : 'Rejection notes (optional)');
-                              await supabase.from('partner_route_requests').update({ status: 'rejected', admin_notes: notes || null }).eq('id', r.id);
-                              toast.success(lang === 'ar' ? 'تم رفض المسار' : 'Route rejected');
+                              const notes = prompt(lang === 'ar' ? 'ملاحظات الرفض' : 'Rejection notes');
+                              await supabase.from('partner_package_requests').update({ status: 'rejected', admin_notes: notes || null }).eq('id', pkg.id);
+                              toast.success(lang === 'ar' ? 'تم رفض الباقة' : 'Package rejected');
                               fetchAllData();
                             }}
-                            className="flex-1 px-3 py-2 bg-destructive text-white rounded-lg text-sm font-medium hover:bg-destructive/90"
-                          >{lang === 'ar' ? 'رفض' : 'Reject'}</button>
+                          >
+                            <XCircle className="w-4 h-4 mr-1" /> {lang === 'ar' ? 'رفض' : 'Reject'}
+                          </Button>
                         </div>
                       )}
-                      {r.admin_notes && <p className="text-xs text-amber-600">{lang === 'ar' ? 'ملاحظات' : 'Notes'}: {r.admin_notes}</p>}
                     </div>
                   );
                 })}
