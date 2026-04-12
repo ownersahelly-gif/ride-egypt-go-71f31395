@@ -1176,7 +1176,7 @@ const DriverDashboard = () => {
                               <option value="go">{lang === 'ar' ? '→ ذهاب' : '→ Going'}</option>
                               <option value="return">{lang === 'ar' ? '← عودة' : '← Return'}</option>
                             </select>
-                            <Input type="time" value={formatTime12h(slot.time, lang)} className="flex-1"
+                            <Input type="time" value={slot.time} className="flex-1"
                               onChange={e => {
                                 const updated = [...scheduleForm.timeSlots];
                                 updated[idx] = { ...updated[idx], time: e.target.value };
@@ -1301,18 +1301,20 @@ const DriverDashboard = () => {
 
             {/* ==================== TRIPS TAB ==================== */}
             {tab === 'trips' && (() => {
+              // Filter out bookings whose route no longer exists or is inactive
+              const validBookings = bookings.filter(b => b.routes != null);
               const grouped: Record<string, any[]> = {};
-              bookings.forEach(b => {
+              validBookings.forEach(b => {
                 const key = `${b.scheduled_date}__${b.route_id || 'no-route'}__${b.scheduled_time}`;
                 if (!grouped[key]) grouped[key] = [];
                 grouped[key].push(b);
               });
               const sortedKeys = Object.keys(grouped).sort((a, b) => {
-                // Sort by date ascending, then time ascending
+                // Sort by date descending, then time descending (most recent first)
                 const [dateA, , timeA] = a.split('__');
                 const [dateB, , timeB] = b.split('__');
-                if (dateA !== dateB) return dateA.localeCompare(dateB);
-                return (timeA || '').localeCompare(timeB || '');
+                if (dateA !== dateB) return dateB.localeCompare(dateA);
+                return (timeB || '').localeCompare(timeA || '');
               });
 
               return (
@@ -1351,7 +1353,14 @@ const DriverDashboard = () => {
                         {isExpanded && (() => {
                           const today = new Date().toISOString().split('T')[0];
                           const isTripToday = first.scheduled_date === today;
-                          const canStartTrip = isTripToday && shuttle?.status === 'active' && activeBookings.length > 0;
+                          // Check 30-min expiry window
+                          const [tripH, tripM] = (first.scheduled_time || '00:00').split(':').map(Number);
+                          const tripDep = new Date(first.scheduled_date + 'T00:00:00');
+                          tripDep.setHours(tripH, tripM, 0);
+                          const msSinceTripDep = Date.now() - tripDep.getTime();
+                          const tripExpired = msSinceTripDep > 30 * 60 * 1000;
+                          const withinWindow = (tripDep.getTime() - Date.now()) <= 2 * 60 * 60 * 1000 && msSinceTripDep <= 30 * 60 * 1000;
+                          const canStartTrip = isTripToday && shuttle?.status === 'active' && activeBookings.length > 0 && withinWindow && !tripExpired;
                           return (
                           <div className="border-t border-border p-4 space-y-3">
                             {canStartTrip && (
