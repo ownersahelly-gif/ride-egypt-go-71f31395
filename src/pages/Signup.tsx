@@ -128,6 +128,10 @@ const Signup = () => {
 
   const handleRiderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!acceptedTerms) {
+      toast({ title: lang === 'ar' ? 'يجب الموافقة على الشروط والأحكام' : 'You must accept the Terms & Conditions', variant: 'destructive' });
+      return;
+    }
     if (password.length < 6) {
       toast({ title: t('auth.error'), description: t('auth.passwordMin'), variant: 'destructive' });
       return;
