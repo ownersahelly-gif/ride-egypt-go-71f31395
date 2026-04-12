@@ -211,42 +211,6 @@ const Legal = () => {
         </div>
       ),
     },
-    data: {
-      en: (
-        <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
-          <p className="text-xs text-muted-foreground">Last updated: {lastUpdated}</p>
-          <h3 className="text-base font-semibold text-foreground">Third-Party Services & Data Providers</h3>
-          <p>{appName} uses the following third-party services to operate:</p>
-          <h3 className="text-base font-semibold text-foreground">Supabase (Database & Authentication)</h3>
-          <p>Hosts user accounts, ride data, and booking information. Data is stored in secure, encrypted cloud infrastructure. <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline">Supabase Privacy Policy</a></p>
-          <h3 className="text-base font-semibold text-foreground">Google Maps Platform</h3>
-          <p>Provides maps, geocoding, place search, and navigation. Location data is sent to Google for map rendering and directions. <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline">Google Privacy Policy</a></p>
-          <h3 className="text-base font-semibold text-foreground">Bunny CDN (Media Storage)</h3>
-          <p>Stores user-uploaded images such as profile photos, driver documents, and payment proofs. <a href="https://bunny.net/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline">Bunny.net Privacy Policy</a></p>
-          <h3 className="text-base font-semibold text-foreground">Apple Push Notification Service (APNs)</h3>
-          <p>Delivers ride updates and booking notifications to your iOS device. Device tokens are stored to route notifications.</p>
-          <h3 className="text-base font-semibold text-foreground">Data Processing</h3>
-          <p>All third-party providers are bound by their respective privacy policies and data processing agreements. We only share the minimum data necessary for each service to function.</p>
-        </div>
-      ),
-      ar: (
-        <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
-          <p className="text-xs text-muted-foreground">آخر تحديث: {lastUpdated}</p>
-          <h3 className="text-base font-semibold text-foreground">الخدمات ومزودو البيانات من الأطراف الثالثة</h3>
-          <p>يستخدم {appName} الخدمات التالية من أطراف ثالثة للتشغيل:</p>
-          <h3 className="text-base font-semibold text-foreground">Supabase (قاعدة البيانات والمصادقة)</h3>
-          <p>يستضيف حسابات المستخدمين وبيانات الرحلات ومعلومات الحجز. يتم تخزين البيانات في بنية تحتية سحابية مشفرة وآمنة.</p>
-          <h3 className="text-base font-semibold text-foreground">Google Maps Platform</h3>
-          <p>يوفر الخرائط والترميز الجغرافي والبحث عن الأماكن والملاحة. يتم إرسال بيانات الموقع إلى Google لعرض الخرائط والاتجاهات.</p>
-          <h3 className="text-base font-semibold text-foreground">Bunny CDN (تخزين الوسائط)</h3>
-          <p>يخزن الصور التي يرفعها المستخدمون مثل صور الملف الشخصي ووثائق السائق وإثباتات الدفع.</p>
-          <h3 className="text-base font-semibold text-foreground">Apple Push Notification Service (APNs)</h3>
-          <p>يقدم تحديثات الرحلات وإشعارات الحجز إلى جهاز iOS الخاص بك.</p>
-          <h3 className="text-base font-semibold text-foreground">معالجة البيانات</h3>
-          <p>جميع مزودي الأطراف الثالثة ملزمون بسياسات الخصوصية واتفاقيات معالجة البيانات الخاصة بهم. نحن نشارك فقط الحد الأدنى من البيانات اللازمة لعمل كل خدمة.</p>
-        </div>
-      ),
-    },
     licenses: {
       en: (
         <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
