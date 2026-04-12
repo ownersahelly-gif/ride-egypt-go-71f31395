@@ -1350,6 +1350,7 @@ const BookRide = () => {
             </div>
           </div>
         )}
+        </div>
       </main>
     </div>
   );
