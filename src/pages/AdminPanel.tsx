@@ -114,17 +114,20 @@ const AdminPanel = () => {
     }
 
     if (settingsRes.data) setInstapayPhone(settingsRes.data.value);
-    // Fetch app name settings
-    const { data: appNameData } = await supabase.from('app_settings').select('key, value').in('key', ['app_name_en', 'app_name_ar']);
-    if (appNameData) {
-      appNameData.forEach((row: any) => {
+    // Fetch ALL app_settings for content
+    const { data: allSettings } = await supabase.from('app_settings').select('key, value');
+    if (allSettings) {
+      const sMap: Record<string, string> = {};
+      allSettings.forEach((row: any) => {
+        sMap[row.key] = row.value;
         if (row.key === 'app_name_en') setAppNameEnSetting(row.value);
         if (row.key === 'app_name_ar') setAppNameArSetting(row.value);
       });
+      setContentSettings(sMap);
     }
     // Fetch global waiting time
-    const { data: waitData } = await supabase.from('app_settings').select('value').eq('key', 'stop_waiting_time_minutes').single();
-    if (waitData) setGlobalWaitingTime(waitData.value);
+    const waitVal = (allSettings || []).find((s: any) => s.key === 'stop_waiting_time_minutes');
+    if (waitVal) setGlobalWaitingTime(waitVal.value);
     setBundles(bundlesRes.data || []);
     const cvs = carpoolVerRes.data || [];
     setCarpoolVerifications(cvs);
