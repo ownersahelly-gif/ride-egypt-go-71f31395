@@ -267,7 +267,15 @@ const MyBookings = () => {
             {bookings.map((booking) => {
               const dp = driverProfiles[booking.shuttles?.driver_id];
               const eta = getEtaInfo(booking);
-
+              // Check if trip is expired (30+ min past departure, never started)
+              const isExpired = (() => {
+                if (!['confirmed', 'pending'].includes(booking.status)) return false;
+                const [eh, em] = (booking.scheduled_time || '00:00').split(':').map(Number);
+                const eDep = new Date(booking.scheduled_date + 'T00:00:00');
+                eDep.setHours(eh, em, 0);
+                return (Date.now() - eDep.getTime()) > 30 * 60 * 1000;
+              })();
+              const effectivelyCancelled = booking.status === 'cancelled' || isExpired;
               return (
                 <div key={booking.id} className="bg-card border border-border rounded-xl p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -279,10 +287,12 @@ const MyBookings = () => {
                         </span>
                       )}
                     </div>
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[booking.status] || ''}`}>
-                      {booking.status === 'boarded' 
-                        ? (lang === 'ar' ? 'في الشاتل' : 'On Board')
-                        : t(`booking.status.${booking.status}`)}
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${effectivelyCancelled ? statusColors['cancelled'] : (statusColors[booking.status] || '')}`}>
+                      {effectivelyCancelled
+                        ? (lang === 'ar' ? 'ملغاة' : 'Cancelled')
+                        : booking.status === 'boarded' 
+                          ? (lang === 'ar' ? 'في الشاتل' : 'On Board')
+                          : t(`booking.status.${booking.status}`)}
                     </span>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
@@ -291,25 +301,25 @@ const MyBookings = () => {
                     <span>{booking.seats} {t('booking.seat')}</span>
                   </div>
 
-                  {/* Expired trip warning — 30+ min past departure, trip never started */}
+                  {/* Expired trip — 30+ min past departure, driver never started = treat as driver-cancelled */}
                   {['confirmed', 'pending'].includes(booking.status) && (() => {
                     const [h, m] = (booking.scheduled_time || '00:00').split(':').map(Number);
                     const depTime = new Date(booking.scheduled_date + 'T00:00:00');
                     depTime.setHours(h, m, 0);
-                    const msSince = Date.now() - depTime.getTime();
-                    const isExpired = msSince > 30 * 60 * 1000;
+                    const isExpired = (Date.now() - depTime.getTime()) > 30 * 60 * 1000;
                     if (!isExpired) return null;
                     return (
-                      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 mb-3 flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-destructive">
-                            {lang === 'ar' ? 'لم يبدأ السائق الرحلة في الوقت المحدد' : 'Driver did not start the trip on time'}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {lang === 'ar' ? 'فات الموعد بأكثر من 30 دقيقة — تم إلغاء الرحلة' : 'Departure passed by 30+ minutes — trip cancelled'}
-                          </p>
-                        </div>
+                      <div className="bg-destructive/15 border-2 border-destructive/30 rounded-xl p-4 mb-3 text-center">
+                        <Ban className="w-10 h-10 text-destructive mx-auto mb-2" />
+                        <p className="text-lg font-extrabold text-destructive uppercase tracking-wide">
+                          {lang === 'ar' ? 'ملغاة' : 'CANCELLED'}
+                        </p>
+                        <p className="text-sm text-destructive/80 font-medium mt-1">
+                          {lang === 'ar' ? 'تم الإلغاء بواسطة السائق — انتظر استرداد كامل المبلغ' : 'Cancelled by the driver — wait for your full refund'}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {lang === 'ar' ? 'لم يبدأ السائق الرحلة في الوقت المحدد' : 'Driver did not start the trip on time'}
+                        </p>
                       </div>
                     );
                   })()}
@@ -342,7 +352,7 @@ const MyBookings = () => {
                   )}
 
                   {/* Boarding code */}
-                  {booking.boarding_code && ['confirmed', 'pending'].includes(booking.status) && (
+                  {booking.boarding_code && ['confirmed', 'pending'].includes(booking.status) && !isExpired && (
                     <div className="bg-surface rounded-lg p-3 mb-3 flex items-center gap-3">
                       <Key className="w-5 h-5 text-primary" />
                       <div>
@@ -444,7 +454,7 @@ const MyBookings = () => {
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-primary">{booking.total_price} EGP</span>
                     <div className="flex items-center gap-2">
-                      {['confirmed', 'boarded'].includes(booking.status) && dp?.phone && (
+                      {['confirmed', 'boarded'].includes(booking.status) && !isExpired && dp?.phone && (
                         <a href={`tel:${dp.phone}`}>
                           <Button variant="outline" size="sm">
                             <Phone className="w-3.5 h-3.5 me-1" />
@@ -452,7 +462,7 @@ const MyBookings = () => {
                           </Button>
                         </a>
                       )}
-                      {['confirmed', 'boarded'].includes(booking.status) && (
+                      {['confirmed', 'boarded'].includes(booking.status) && !isExpired && (
                         <Button variant="outline" size="sm" className="relative" onClick={() => setChatBookingId(booking.id)}>
                           <MessageCircle className="w-3.5 h-3.5 me-1" />
                           {lang === 'ar' ? 'محادثة' : 'Chat'}
@@ -461,7 +471,7 @@ const MyBookings = () => {
                           )}
                         </Button>
                       )}
-                      {['confirmed', 'boarded'].includes(booking.status) && (
+                      {['confirmed', 'boarded'].includes(booking.status) && !isExpired && (
                         <Link to={`/track?booking=${booking.id}`}>
                           <Button variant="outline" size="sm">
                             <Navigation className="w-3.5 h-3.5 me-1" />
@@ -475,7 +485,7 @@ const MyBookings = () => {
                           {cancellingId === booking.id ? (lang === 'ar' ? 'جاري...' : 'Cancelling...') : t('booking.cancel')}
                         </Button>
                       )}
-                      {booking.status === 'cancelled' && !booking.skipped_at && parseFloat(booking.total_price || 0) > 0 && (
+                      {(booking.status === 'cancelled' || isExpired) && !booking.skipped_at && parseFloat(booking.total_price || 0) > 0 && (
                         <Button variant="outline" size="sm" onClick={() => requestRefund(booking)}
                           disabled={requestingRefund === booking.id}>
                           <RotateCcw className="w-3.5 h-3.5 me-1" />
