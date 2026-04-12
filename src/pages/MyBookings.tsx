@@ -267,7 +267,15 @@ const MyBookings = () => {
             {bookings.map((booking) => {
               const dp = driverProfiles[booking.shuttles?.driver_id];
               const eta = getEtaInfo(booking);
-
+              // Check if trip is expired (30+ min past departure, never started)
+              const isExpired = (() => {
+                if (!['confirmed', 'pending'].includes(booking.status)) return false;
+                const [eh, em] = (booking.scheduled_time || '00:00').split(':').map(Number);
+                const eDep = new Date(booking.scheduled_date + 'T00:00:00');
+                eDep.setHours(eh, em, 0);
+                return (Date.now() - eDep.getTime()) > 30 * 60 * 1000;
+              })();
+              const effectivelyCancelled = booking.status === 'cancelled' || isExpired;
               return (
                 <div key={booking.id} className="bg-card border border-border rounded-xl p-5">
                   <div className="flex items-center justify-between mb-3">
