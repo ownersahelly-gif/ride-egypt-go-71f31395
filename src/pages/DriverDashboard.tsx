@@ -1039,6 +1039,16 @@ const DriverDashboard = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* View all previous trips button */}
+                <Button
+                  variant="outline"
+                  className="w-full h-12 text-sm"
+                  onClick={() => setTab('trips')}
+                >
+                  <Navigation className="w-4 h-4 me-2" />
+                  {lang === 'ar' ? 'عرض جميع الرحلات السابقة' : 'View All Previous Trips'}
+                </Button>
               </div>
             )}
 
