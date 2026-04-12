@@ -701,8 +701,27 @@ const ActiveRide = () => {
     : true;
   const canAdvance = allPickupsHandledAtStop && allDropoffsHandledAtStop;
 
+  // Only show pickup stops in step-by-step flow
+  const pickupStops = activeStops.filter(s => s.pickupPassengers.length > 0);
+  const currentPickup = pickupStops[currentStopIndex] || null;
+  const allPickupsDone = pickupStops.length > 0 && currentStopIndex >= pickupStops.length;
+
+  // Check if all pickups at current stop are handled
+  const allHandledAtStop = currentPickup
+    ? currentPickup.pickupPassengers.every(p => {
+        const b = bookings.find(bk => bk.id === p.bookingId);
+        return b?.status === 'boarded' || b?.status === 'cancelled';
+      })
+    : true;
+
+  // Navigate to current stop URL
+  const currentStopNavUrl = currentPickup && driverLocation
+    ? `https://www.google.com/maps/dir/?api=1&origin=${driverLocation.lat},${driverLocation.lng}&destination=${currentPickup.stop.lat},${currentPickup.stop.lng}&travelmode=driving`
+    : null;
+
   return (
     <div className="h-screen bg-surface flex flex-col overflow-hidden">
+      {/* Simple header */}
       <header className="bg-card border-b border-border shrink-0 z-40 safe-area-top">
         <div className="container mx-auto flex items-center h-14 px-4 gap-3">
           <Link to="/driver-dashboard">
@@ -712,19 +731,19 @@ const ActiveRide = () => {
             {lang === 'ar' ? 'الرحلة النشطة' : 'Active Ride'}
           </h1>
           <span className="ms-auto text-xs px-2.5 py-1 rounded-full font-medium bg-primary/10 text-primary">
-            {currentStopIndex}/{activeStops.length} {lang === 'ar' ? 'توقفات' : 'stops'}
+            {boardedCount}/{totalCount}
           </span>
         </div>
       </header>
 
-      {/* Navigate Full Trip button */}
+      {/* Google Maps Full Trip navigation */}
       {googleMapsUrl && (
         <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="block">
           <div className="bg-primary px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Navigation className="w-5 h-5 text-primary-foreground" />
               <span className="text-primary-foreground font-semibold text-sm">
-                {lang === 'ar' ? 'افتح الرحلة كاملة في خرائط جوجل' : 'Navigate Full Trip in Google Maps'}
+                {lang === 'ar' ? 'افتح كل الرحلة في خرائط جوجل' : 'Navigate Full Trip'}
               </span>
             </div>
             <ExternalLink className="w-4 h-4 text-primary-foreground" />
@@ -733,7 +752,7 @@ const ActiveRide = () => {
       )}
 
       {/* Map */}
-      <div className="h-[280px] relative">
+      <div className="h-[220px] relative">
         <MapView
           className="h-full"
           markers={markers}
@@ -744,291 +763,205 @@ const ActiveRide = () => {
           zoom={13}
           showUserLocation={false}
         />
-        <div className="absolute top-3 start-3 z-[5] bg-card border border-border rounded-xl shadow-lg px-4 py-2.5 flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <UserCheck className="w-4 h-4 text-primary" />
-            <span className="text-sm font-bold text-foreground">{boardedCount}</span>
-            <span className="text-xs text-muted-foreground">/ {totalCount}</span>
-          </div>
-          <div className="w-px h-5 bg-border" />
-          <span className="text-xs text-muted-foreground">
-            {lang === 'ar' ? 'في الشاتل' : 'on board'}
-          </span>
+        <div className="absolute top-3 start-3 z-[5] bg-card border border-border rounded-xl shadow-lg px-4 py-2 flex items-center gap-2">
+          <UserCheck className="w-4 h-4 text-primary" />
+          <span className="text-sm font-bold text-foreground">{boardedCount}</span>
+          <span className="text-xs text-muted-foreground">/ {totalCount}</span>
         </div>
       </div>
 
-      {/* Current stop card */}
+      {/* Main content — super simple */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {currentActive ? (
-          <div className="rounded-2xl border-2 p-5 bg-orange-50 border-orange-300 dark:bg-orange-950/30 dark:border-orange-800">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold bg-orange-200 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
-                {currentStopIndex + 1}
-              </div>
-              <div className="flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {lang === 'ar' ? 'التوقف التالي' : 'Next Stop'}
-                </p>
-                <p className="text-lg font-bold text-foreground">
-                  {lang === 'ar' ? currentActive.stop.name_ar : currentActive.stop.name_en}
-                </p>
+
+        {/* PICKUP PHASE: Step through each stop */}
+        {currentPickup && !allHandledAtStop && (
+          <div className="rounded-2xl border-2 border-primary/30 bg-card p-6 space-y-4">
+            {/* Who to pickup */}
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                {lang === 'ar' ? `التوقف ${currentStopIndex + 1} من ${pickupStops.length}` : `Stop ${currentStopIndex + 1} of ${pickupStops.length}`}
+              </p>
+              <p className="text-2xl font-bold text-foreground">
+                {lang === 'ar' ? 'اذهب لـ' : 'Go pickup'}
+              </p>
+              <div className="mt-2 space-y-1">
+                {currentPickup.pickupPassengers
+                  .filter(p => {
+                    const b = bookings.find(bk => bk.id === p.bookingId);
+                    return b?.status !== 'boarded' && b?.status !== 'cancelled';
+                  })
+                  .map(p => (
+                    <p key={p.bookingId} className="text-xl font-bold text-primary">{p.name}</p>
+                  ))}
               </div>
             </div>
 
-            <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
-              <MapPin className="w-4 h-4 shrink-0" />
-              <span>{lang === 'ar' ? currentActive.stop.name_ar : currentActive.stop.name_en}</span>
-            </div>
+            {/* Navigate button */}
+            {currentStopNavUrl && !arrivedAt && (
+              <a href={currentStopNavUrl} target="_blank" rel="noopener noreferrer">
+                <Button className="w-full gap-2" size="lg">
+                  <Navigation className="w-5 h-5" />
+                  {lang === 'ar' ? 'افتح الملاحة' : 'Navigate'}
+                </Button>
+              </a>
+            )}
 
-            {/* Navigate to this stop and remaining stops */}
-            <a
-              href={buildGoogleMapsUrl(currentRouteStopIndex) || undefined}
-              target="_blank" rel="noopener noreferrer" className="mb-4 block"
-            >
-              <Button variant="secondary" className="w-full gap-2">
-                <Navigation className="w-4 h-4" />
-                {lang === 'ar' ? 'افتح الملاحة في خرائط جوجل' : 'Open Navigation in Google Maps'}
-                <ArrowRight className="w-4 h-4 ms-auto" />
-              </Button>
-            </a>
-
-            {/* "I Arrived" button + timer */}
+            {/* I Arrived button */}
             {!arrivedAt && (
               <Button
-                className="w-full mb-3"
+                className="w-full"
+                size="lg"
                 variant="outline"
-                disabled={driverLocation ? haversineDistance(driverLocation, { lat: currentActive.stop.lat, lng: currentActive.stop.lng }) > REACH_THRESHOLD_M : true}
                 onClick={() => {
                   setArrivedAt(Date.now());
                   setWaitSeconds(0);
-                  // Update driver_arrived_at for all pickups at this stop
-                  currentActive.pickupPassengers.forEach(p => {
+                  currentPickup.pickupPassengers.forEach(p => {
                     supabase.from('bookings').update({ driver_arrived_at: new Date().toISOString() }).eq('id', p.bookingId);
                   });
-                  toast({
-                    title: lang === 'ar' ? `⏱️ بدأ العد — ${waitTimeMinutes} دقيقة` : `⏱️ Timer started — ${waitTimeMinutes} min`,
-                  });
+                  toast({ title: lang === 'ar' ? `⏱️ بدأ العد — ${waitTimeMinutes} دقيقة` : `⏱️ Timer started — ${waitTimeMinutes} min` });
                 }}
               >
-                <Clock className="w-4 h-4 me-2" />
-                {driverLocation && haversineDistance(driverLocation, { lat: currentActive.stop.lat, lng: currentActive.stop.lng }) <= REACH_THRESHOLD_M
-                  ? (lang === 'ar' ? 'وصلت — ابدأ العد' : "I've Arrived — Start Timer")
-                  : (lang === 'ar' ? 'بعيد عن التوقف' : 'Too far from stop')}
+                <Clock className="w-5 h-5 me-2" />
+                {lang === 'ar' ? 'وصلت' : "I Arrived"}
               </Button>
             )}
 
+            {/* Timer + Code verification */}
             {arrivedAt && (
-              <div className="bg-card border border-border rounded-xl p-3 mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-primary" />
+              <>
+                {/* Timer */}
+                <div className="bg-surface rounded-xl p-4 flex items-center justify-between">
                   <span className="text-sm font-medium text-foreground">
-                    {lang === 'ar' ? 'وقت الانتظار' : 'Wait Time'}
+                    {lang === 'ar' ? 'وقت الانتظار' : 'Waiting'}
+                  </span>
+                  <span className={`text-lg font-bold font-mono ${waitSeconds >= waitTimeSec ? 'text-destructive' : 'text-foreground'}`}>
+                    {Math.floor(waitSeconds / 60)}:{String(waitSeconds % 60).padStart(2, '0')}
                   </span>
                 </div>
-                <span className={`text-sm font-bold ${waitSeconds >= waitTimeSec ? 'text-destructive' : 'text-foreground'}`}>
-                  {Math.floor(waitSeconds / 60)}:{String(waitSeconds % 60).padStart(2, '0')} / {waitTimeMinutes}:00
-                </span>
-              </div>
-            )}
 
-            {/* Pickup passengers at this stop */}
-            {currentActive.pickupPassengers.length > 0 && (
-              <div className="space-y-2 mb-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase">
-                  {lang === 'ar' ? `صعود (${currentActive.pickupPassengers.length})` : `Pickups (${currentActive.pickupPassengers.length})`}
-                </p>
-                {currentActive.pickupPassengers.map(p => {
+                {/* Each passenger: code input */}
+                {currentPickup.pickupPassengers.map(p => {
                   const b = bookings.find(bk => bk.id === p.bookingId);
-                  const isBoarded = b?.status === 'boarded';
-                  const isCancelled = b?.status === 'cancelled';
-                  const amountDue = p.paymentProofUrl ? 0 : p.totalPrice;
+                  if (b?.status === 'boarded' || b?.status === 'cancelled') return null;
 
                   return (
-                    <div key={p.bookingId} className={`bg-card border rounded-xl p-3 ${isBoarded ? 'border-green-300 bg-green-50 dark:bg-green-950/20' : isCancelled ? 'opacity-50' : 'border-border'}`}>
-                      <div className="flex items-center justify-between mb-2">
+                    <div key={p.bookingId} className="bg-surface rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-lg font-bold text-foreground">{p.name}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-foreground">{p.name}</span>
-                          <span className="text-[10px] text-muted-foreground">({p.seats} {lang === 'ar' ? 'مقعد' : 'seat'})</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
                           {p.phone && (
                             <a href={`tel:${p.phone}`}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7"><Phone className="w-3.5 h-3.5" /></Button>
+                              <Button variant="outline" size="icon" className="h-9 w-9 rounded-full">
+                                <Phone className="w-4 h-4" />
+                              </Button>
                             </a>
                           )}
-                          <Button variant="ghost" size="icon" className="h-7 w-7 relative" onClick={() => setChatBookingId(p.bookingId)}>
-                            <MessageCircle className="w-3.5 h-3.5" />
-                            {unreadBookings.has(p.bookingId) && (
-                              <span className="absolute -top-0.5 -end-0.5 w-2.5 h-2.5 bg-destructive rounded-full" />
-                            )}
+                          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setChatBookingId(p.bookingId)}>
+                            <MessageCircle className="w-4 h-4" />
                           </Button>
                         </div>
                       </div>
 
-                      {/* Payment info */}
-                      <div className="flex items-center gap-1.5 text-xs mb-2">
-                        <DollarSign className="w-3 h-3" />
-                        {amountDue > 0 ? (
-                          <span className="text-amber-600 font-medium">
-                            {lang === 'ar' ? `💵 كاش: ${amountDue} جنيه` : `💵 Cash: ${amountDue} EGP`}
-                          </span>
-                        ) : (
-                          <span className="text-green-600 font-medium">
-                            {lang === 'ar' ? '✅ مدفوع — 0 جنيه' : '✅ Paid — 0 EGP'}
-                          </span>
-                        )}
-                      </div>
-
-                      {isBoarded ? (
-                        <span className="text-xs text-green-600 font-medium">✓ {lang === 'ar' ? 'صعد' : 'Boarded'}</span>
-                      ) : isCancelled ? (
-                        <span className="text-xs text-destructive font-medium">{lang === 'ar' ? 'تم التخطي' : 'Skipped'}</span>
-                      ) : verifyingBooking === p.bookingId ? (
+                      {verifyingBooking === p.bookingId ? (
                         <div className="flex items-center gap-2">
                           <Input
                             value={boardingInput}
                             onChange={(e) => setBoardingInput(e.target.value)}
-                            placeholder={lang === 'ar' ? 'الرمز المكون من 6 أرقام' : '6-digit code'}
-                            className="h-9 text-sm flex-1 font-mono tracking-widest text-center"
+                            placeholder={lang === 'ar' ? '6 أرقام' : '6-digit code'}
+                            className="h-12 text-center font-mono tracking-[0.3em] text-lg"
                             maxLength={6}
                             autoFocus
                           />
-                          <Button size="sm" onClick={() => verifyBoarding(p.bookingId)} disabled={boardingInput.length !== 6}>
-                            <CheckCircle2 className="w-3.5 h-3.5 me-1" />
-                            {lang === 'ar' ? 'تأكيد' : 'Verify'}
+                          <Button size="lg" onClick={() => verifyBoarding(p.bookingId)} disabled={boardingInput.length !== 6}>
+                            <CheckCircle2 className="w-5 h-5" />
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => { setVerifyingBooking(null); setBoardingInput(''); }}>✕</Button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <Button size="sm" className="flex-1" onClick={() => { setVerifyingBooking(p.bookingId); setBoardingInput(''); }}>
-                            <CheckCircle2 className="w-3.5 h-3.5 me-1" />
-                            {lang === 'ar' ? 'تأكيد صعود' : 'Verify'}
-                          </Button>
-                          {arrivedAt && waitSeconds >= waitTimeSec && (
-                            <Button size="sm" variant="destructive" onClick={() => skipPassenger(p.bookingId)}>
-                              <SkipForward className="w-3.5 h-3.5 me-1" />
-                              {lang === 'ar' ? 'تخطي' : 'Skip'}
-                            </Button>
-                          )}
-                        </div>
+                        <Button className="w-full" size="lg" onClick={() => { setVerifyingBooking(p.bookingId); setBoardingInput(''); }}>
+                          <CheckCircle2 className="w-5 h-5 me-2" />
+                          {lang === 'ar' ? 'أدخل الرمز' : 'Enter Code'}
+                        </Button>
+                      )}
+
+                      {/* Skip button — only after timer expires */}
+                      {waitSeconds >= waitTimeSec && (
+                        <Button variant="destructive" className="w-full" onClick={() => skipPassenger(p.bookingId)}>
+                          <SkipForward className="w-4 h-4 me-2" />
+                          {lang === 'ar' ? 'تخطي' : 'Skip'}
+                        </Button>
                       )}
                     </div>
                   );
                 })}
-              </div>
+              </>
             )}
-
-            {/* Dropoff passengers at this stop */}
-            {currentActive.dropoffPassengers.length > 0 && (
-              <div className="space-y-2 mb-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase">
-                  {lang === 'ar' ? `نزول (${currentActive.dropoffPassengers.length})` : `Drop-offs (${currentActive.dropoffPassengers.length})`}
-                </p>
-                {currentActive.dropoffPassengers.map(p => {
-                  const b = bookings.find(bk => bk.id === p.bookingId);
-                  const isCompleted = b?.status === 'completed';
-
-                  return (
-                    <div key={`drop-${p.bookingId}`} className={`bg-card border rounded-xl p-3 ${isCompleted ? 'border-green-300 bg-green-50 dark:bg-green-950/20' : 'border-border'}`}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-foreground">{p.name}</span>
-                        {isCompleted ? (
-                          <span className="text-xs text-green-600 font-medium">✓ {lang === 'ar' ? 'نزل' : 'Dropped off'}</span>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => markDroppedOff(p.bookingId)}>
-                            <DropOff className="w-3.5 h-3.5 me-1" />
-                            {lang === 'ar' ? 'تأكيد نزول' : 'Drop off'}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Navigation buttons */}
-            <div className="flex items-center gap-2 mt-3">
-              {currentStopIndex > 0 && (
-                <Button variant="outline" onClick={goToPreviousStop}>
-                  <Undo2 className="w-4 h-4 me-1" />
-                  {lang === 'ar' ? 'السابق' : 'Previous'}
-                </Button>
-              )}
-              {currentStopIndex < activeStops.length - 1 && (
-                <Button className="flex-1" onClick={advanceToNextStop} disabled={!canAdvance}>
-                  <ArrowRight className="w-4 h-4 me-1" />
-                  {lang === 'ar' ? 'التوقف التالي' : 'Next Stop'}
-                </Button>
-              )}
-            </div>
           </div>
-        ) : activeStops.length === 0 ? (
+        )}
+
+        {/* All pickups at current stop handled → Next stop */}
+        {currentPickup && allHandledAtStop && currentStopIndex < pickupStops.length - 1 && (
+          <div className="rounded-2xl border-2 border-green-300 bg-green-50 dark:bg-green-950/20 p-6 text-center space-y-4">
+            <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto" />
+            <p className="text-lg font-bold text-foreground">
+              {lang === 'ar' ? 'تم! التالي؟' : 'Done! Next stop?'}
+            </p>
+            <Button className="w-full" size="lg" onClick={() => {
+              setCurrentStopIndex(prev => prev + 1);
+              setArrivedAt(null);
+              setWaitSeconds(0);
+              setVerifyingBooking(null);
+              setBoardingInput('');
+            }}>
+              <ArrowRight className="w-5 h-5 me-2" />
+              {lang === 'ar' ? 'التوقف التالي' : 'Next Stop'}
+            </Button>
+          </div>
+        )}
+
+        {/* Last pickup stop handled or all pickups done */}
+        {(allPickupsDone || (currentPickup && allHandledAtStop && currentStopIndex >= pickupStops.length - 1)) && (
+          <div className="rounded-2xl border-2 border-green-300 bg-green-50 dark:bg-green-950/20 p-6 text-center space-y-4">
+            <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto" />
+            <p className="text-lg font-bold text-foreground">
+              {lang === 'ar' ? 'تم جمع جميع الركاب!' : 'All passengers picked up!'}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {lang === 'ar'
+                ? 'استخدم خرائط جوجل للوصول إلى نقاط الإنزال'
+                : 'Use Google Maps to navigate to drop-off points'}
+            </p>
+            {googleMapsUrl && (
+              <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer">
+                <Button className="w-full gap-2" size="lg" variant="outline">
+                  <Navigation className="w-5 h-5" />
+                  {lang === 'ar' ? 'افتح خرائط جوجل' : 'Open Google Maps'}
+                </Button>
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* No passengers */}
+        {pickupStops.length === 0 && (
           <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
             {lang === 'ar' ? 'لا يوجد ركاب اليوم' : 'No passengers today'}
-          </div>
-        ) : (
-          <div className="bg-green-50 dark:bg-green-950/30 border-2 border-green-300 dark:border-green-800 rounded-2xl p-6 text-center">
-            <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-2" />
-            <p className="text-lg font-bold text-foreground">
-              {lang === 'ar' ? 'تم الانتهاء من جميع التوقفات!' : 'All stops completed!'}
-            </p>
-          </div>
-        )}
-
-        {/* Upcoming stops preview */}
-        {activeStops.length > currentStopIndex + 1 && (
-          <div className="bg-card border border-border rounded-xl p-4">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              {lang === 'ar' ? 'التوقفات القادمة' : 'Upcoming Stops'}
-            </h4>
-            <div className="space-y-2">
-              {activeStops.slice(currentStopIndex + 1, currentStopIndex + 4).map((as, i) => (
-                <div key={as.stop.id} className="flex items-center gap-3 text-sm">
-                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-blue-100 text-blue-700">
-                    {currentStopIndex + 2 + i}
-                  </span>
-                  <span className="text-foreground flex-1 truncate">
-                    {lang === 'ar' ? as.stop.name_ar : as.stop.name_en}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {as.pickupPassengers.length > 0 && `${as.pickupPassengers.length}↑`}
-                    {as.pickupPassengers.length > 0 && as.dropoffPassengers.length > 0 && ' '}
-                    {as.dropoffPassengers.length > 0 && `${as.dropoffPassengers.length}↓`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* On-board summary */}
-        {boardedCount > 0 && (
-          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
-            <Users className="w-5 h-5 text-primary shrink-0" />
-            <p className="text-sm text-foreground">
-              {lang === 'ar'
-                ? `${boardedCount} راكب في الشاتل الآن`
-                : `${boardedCount} passenger${boardedCount > 1 ? 's' : ''} currently on board`}
-            </p>
           </div>
         )}
       </div>
 
-      {/* Complete Ride button */}
-      {boardedCount > 0 && !allCompleted && (
-        <div className="border-t border-border bg-card p-4">
+      {/* Complete Ride button — shown when all pickups done and someone is on board */}
+      {boardedCount > 0 && (allPickupsDone || (currentPickup && allHandledAtStop && currentStopIndex >= pickupStops.length - 1)) && (
+        <div className="border-t border-border bg-card p-4 safe-area-bottom">
           <Button className="w-full" size="lg" variant="destructive" onClick={() => setShowEndRideDialog(true)}>
             <Flag className="w-5 h-5 me-2" />
             {lang === 'ar'
               ? `إنهاء الرحلة (${boardedCount} راكب)`
-              : `Complete Ride (${boardedCount} passengers)`}
+              : `Complete Ride (${boardedCount})`}
           </Button>
         </div>
       )}
 
-      {/* End Ride Confirmation Dialog */}
+      {/* End Ride Confirmation */}
       {showEndRideDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-card border border-border rounded-2xl p-6 w-[90%] max-w-sm shadow-xl space-y-4">
@@ -1045,17 +978,17 @@ const ActiveRide = () => {
             </div>
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setShowEndRideDialog(false)}>
-                {lang === 'ar' ? 'لا، ارجع' : 'No, Go Back'}
+                {lang === 'ar' ? 'لا' : 'No'}
               </Button>
               <Button variant="destructive" className="flex-1" onClick={completeRide}>
-                {lang === 'ar' ? 'نعم، أنهِ الرحلة' : 'Yes, End Ride'}
+                {lang === 'ar' ? 'نعم، أنهِ' : 'Yes, End'}
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Earnings Summary Modal */}
+      {/* Earnings Summary */}
       {showEarningsSummary && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-card border border-border rounded-2xl p-6 w-[90%] max-w-sm shadow-xl space-y-4">
@@ -1070,32 +1003,22 @@ const ActiveRide = () => {
             </div>
             <div className="text-center py-4">
               <p className="text-4xl font-bold text-primary">{totalEarnings} EGP</p>
-              <p className="text-sm text-muted-foreground mt-1">{lang === 'ar' ? 'إجمالي أرباح اليوم' : "Today's Total Earnings"}</p>
+              <p className="text-sm text-muted-foreground mt-1">{lang === 'ar' ? 'إجمالي الأرباح' : 'Total Earnings'}</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-surface rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-foreground">{completedCount}</p>
-                <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'راكب' : 'Passengers'}</p>
+                <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'راكب' : 'Riders'}</p>
               </div>
               <div className="bg-surface rounded-xl p-3 text-center">
-                <p className="text-xl font-bold text-foreground">{activeStops.length}</p>
-                <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'توقف' : 'Stops'}</p>
-              </div>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">{lang === 'ar' ? '💵 كاش' : '💵 Cash'}</span>
-                <span className="font-medium text-foreground">{cashEarnings} EGP</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">{lang === 'ar' ? '📱 إلكتروني' : '📱 Online'}</span>
-                <span className="font-medium text-foreground">{onlineEarnings} EGP</span>
+                <p className="text-xl font-bold text-foreground">{cashEarnings} / {onlineEarnings}</p>
+                <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'كاش / إلكتروني' : 'Cash / Online'}</p>
               </div>
             </div>
             <Link to="/driver-dashboard" className="block">
               <Button className="w-full" size="lg">
                 <CheckCircle2 className="w-4 h-4 me-2" />
-                {lang === 'ar' ? 'العودة للرئيسية' : 'Back to Dashboard'}
+                {lang === 'ar' ? 'العودة' : 'Done'}
               </Button>
             </Link>
           </div>
