@@ -99,20 +99,27 @@ const Legal = () => {
           <ul className="list-disc list-inside space-y-1">
             <li>Prices are displayed before booking confirmation</li>
             <li>Payments are processed via InstaPay or wallet balance</li>
-            <li>Cancellation refunds follow our refund policy (50% if driver already departed)</li>
             <li>Bundle/package purchases are non-refundable once rides are used</li>
           </ul>
-          <h3 className="text-base font-semibold text-foreground">5. User Conduct</h3>
+          <h3 className="text-base font-semibold text-foreground">5. Cancellation & Refund Policy</h3>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Cancellation 24+ hours before departure:</strong> 50% refund issued to your wallet</li>
+            <li><strong>Cancellation within 24 hours of departure:</strong> No refund is issued</li>
+            <li><strong>Driver no-show (30+ min late):</strong> Full refund issued automatically</li>
+            <li><strong>Skipped by driver (no-show at pickup):</strong> 50% refund</li>
+            <li>All refunds are credited to your in-app wallet and reviewed by our team</li>
+          </ul>
+          <h3 className="text-base font-semibold text-foreground">6. User Conduct</h3>
           <p>Users must not: use the service for illegal purposes, harass drivers or other passengers, provide false identity documents, attempt to manipulate the booking system, or interfere with the app's operation.</p>
-          <h3 className="text-base font-semibold text-foreground">6. Driver Requirements</h3>
+          <h3 className="text-base font-semibold text-foreground">7. Driver Requirements</h3>
           <p>Drivers must maintain valid licenses, vehicle registration, and insurance. Vehicles must pass safety inspections. {appName} reserves the right to deactivate driver accounts for safety violations.</p>
-          <h3 className="text-base font-semibold text-foreground">7. Limitation of Liability</h3>
+          <h3 className="text-base font-semibold text-foreground">8. Limitation of Liability</h3>
           <p>{appName} acts as a platform connecting riders and drivers. We are not a transportation company. While we verify drivers and vehicles, we are not liable for incidents during rides beyond what is required by applicable Egyptian law.</p>
-          <h3 className="text-base font-semibold text-foreground">8. Intellectual Property</h3>
+          <h3 className="text-base font-semibold text-foreground">9. Intellectual Property</h3>
           <p>All content, trademarks, and technology in {appName} are owned by or licensed to us. You may not copy, modify, or distribute any part of the app without written permission.</p>
-          <h3 className="text-base font-semibold text-foreground">9. Termination</h3>
+          <h3 className="text-base font-semibold text-foreground">10. Termination</h3>
           <p>We may suspend or terminate your account for violations of these terms. You may delete your account at any time through the app.</p>
-          <h3 className="text-base font-semibold text-foreground">10. Governing Law</h3>
+          <h3 className="text-base font-semibold text-foreground">11. Governing Law</h3>
           <p>These terms are governed by the laws of the Arab Republic of Egypt. Disputes shall be resolved in Egyptian courts.</p>
         </div>
       ),
