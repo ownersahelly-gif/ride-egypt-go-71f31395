@@ -639,13 +639,18 @@ const ActiveRide = () => {
       .slice(fromIndex ?? 0)
       .filter(stop => bookedStopIds.has(stop.id));
 
+    if (relevantStops.length === 0) return null;
+
     const origin = driverLocation
       ? `${driverLocation.lat},${driverLocation.lng}`
-      : `${route.origin_lat},${route.origin_lng}`;
-    const destination = `${route.destination_lat},${route.destination_lng}`;
-    const waypoints = relevantStops.map(stop => `${stop.lat},${stop.lng}`).join('|');
+      : `${relevantStops[0].lat},${relevantStops[0].lng}`;
+    
+    // Destination = last booked stop (not route endpoint if no one goes there)
+    const lastStop = relevantStops[relevantStops.length - 1];
+    const destination = `${lastStop.lat},${lastStop.lng}`;
+    const waypoints = relevantStops.slice(0, -1).map(stop => `${stop.lat},${stop.lng}`).join('|');
 
-    return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+    return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints ? `&waypoints=${waypoints}` : ''}&travelmode=driving`;
   };
 
   const currentActive = activeStops[currentStopIndex] || null;

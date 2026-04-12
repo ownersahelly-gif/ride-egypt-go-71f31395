@@ -366,16 +366,18 @@ const TrackShuttle = () => {
         <p className="text-muted-foreground mb-8">
           {lang === 'ar' ? 'نتمنى لك يومًا سعيدًا 🌟' : 'We hope you had a great ride 🌟'}
         </p>
-        {!showRating && (
-          <Button size="lg" className="mb-4" onClick={() => setShowRating(true)}>
-            <Star className="w-4 h-4 me-2" />
-            {lang === 'ar' ? 'قيّم رحلتك' : 'Rate your ride'}
-          </Button>
-        )}
-        {showRating && booking && shuttle?.driver_id && (
-          <div className="w-full max-w-sm mb-4">
-            <RideRating bookingId={booking.id} driverId={shuttle.driver_id} onDone={() => setShowRating(false)} />
-          </div>
+        <Button size="lg" className="mb-4" onClick={() => setShowRating(true)}>
+          <Star className="w-4 h-4 me-2" />
+          {lang === 'ar' ? 'قيّم رحلتك' : 'Rate your ride'}
+        </Button>
+        {booking && (
+          <RideRating
+            bookingId={booking.id}
+            driverId={shuttle?.driver_id}
+            isOpen={showRating}
+            onClose={() => setShowRating(false)}
+            onRated={() => setShowRating(false)}
+          />
         )}
         <Link to="/my-bookings">
           <Button variant="outline" size="lg">
