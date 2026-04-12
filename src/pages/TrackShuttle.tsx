@@ -8,12 +8,23 @@ import MapView from '@/components/MapView';
 import {
   ChevronLeft, ChevronRight, MapPin, Clock, Car, RefreshCw,
   Radio, Users, Navigation, Phone, MessageCircle, Key, ArrowRight,
-  Shield, Share2, ExternalLink, Star, CheckCircle2, AlertCircle, Heart
+  Shield, Share2, ExternalLink, Star, CheckCircle2, AlertCircle, Heart,
+  LogOut, AlertTriangle
 } from 'lucide-react';
 import RideChat from '@/components/RideChat';
 import { useToast } from '@/hooks/use-toast';
 import { useSmoothMarker } from '@/hooks/useSmoothMarker';
 import RideRating from '@/components/RideRating';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface PassengerStop {
   userId: string;
@@ -60,6 +71,11 @@ const TrackShuttle = () => {
 
   const [rideBookings, setRideBookings] = useState<any[]>([]);
   const [passengerStops, setPassengerStops] = useState<PassengerStop[]>([]);
+
+  // Exit trip state — two-step confirmation
+  const [showExitStep1, setShowExitStep1] = useState(false);
+  const [showExitStep2, setShowExitStep2] = useState(false);
+  const [exiting, setExiting] = useState(false);
 
   const { position: smoothDriverPos, updatePosition: updateSmoothPos } = useSmoothMarker(1200);
 
@@ -149,7 +165,7 @@ const TrackShuttle = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Real-time booking status subscription — detect boarded/skipped/completed
+  // Real-time booking status subscription
   useEffect(() => {
     if (!bookingId) return;
     const channel = supabase
@@ -321,6 +337,41 @@ const TrackShuttle = () => {
 
     return () => { supabase.removeChannel(channel); clearInterval(interval); };
   }, [shuttle?.id, booking?.status]);
+
+  // === EXIT TRIP HANDLER ===
+  const handleExitTrip = async () => {
+    if (!bookingId || exiting) return;
+    setExiting(true);
+    try {
+      await supabase
+        .from('bookings')
+        .update({ status: 'cancelled' })
+        .eq('id', bookingId);
+
+      // Create refund request
+      if (booking?.total_price > 0) {
+        await supabase.from('refunds').insert({
+          user_id: user!.id,
+          booking_id: bookingId,
+          amount: booking.total_price,
+          reason: 'Rider exited trip voluntarily',
+          status: 'pending',
+          refund_type: 'pending',
+        });
+      }
+
+      toast({
+        title: lang === 'ar' ? 'تم الخروج من الرحلة' : 'Trip exited',
+        description: lang === 'ar' ? 'تم إلغاء حجزك. سيتم مراجعة طلب الاسترداد.' : 'Your booking has been cancelled. Refund request will be reviewed.',
+      });
+      navigate('/my-bookings');
+    } catch (e) {
+      toast({ title: lang === 'ar' ? 'حدث خطأ' : 'Error', variant: 'destructive' });
+    } finally {
+      setExiting(false);
+      setShowExitStep2(false);
+    }
+  };
 
   const shuttleIsActive = shuttle?.status === 'active';
   const hasLiveGps = !!(smoothDriverPos && shuttleIsActive);
@@ -535,7 +586,7 @@ const TrackShuttle = () => {
         </div>
       </header>
 
-      <div className="relative" style={{ height: '45vh', minHeight: '280px' }}>
+      <div className="relative" style={{ height: '40vh', minHeight: '260px' }}>
         {!hasLiveGps && !loading ? (
           <div className="h-full bg-muted flex flex-col items-center justify-center text-center p-6">
             <Car className="w-16 h-16 text-muted-foreground/40 mb-4" />
@@ -615,15 +666,19 @@ const TrackShuttle = () => {
             )}
 
             <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-foreground text-sm">{lang === 'ar' ? route?.name_ar : route?.name_en}</h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  shuttle?.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'
-                }`}>
-                  {shuttle?.status === 'active' ? (lang === 'ar' ? 'في الطريق' : 'On the way') : (lang === 'ar' ? 'في الانتظار' : 'Waiting')}
-                </span>
-              </div>
+              {/* BIG Boarding Code — front and center */}
+              {booking.boarding_code && (
+                <div className="bg-primary/5 border-2 border-primary/20 rounded-2xl p-5 text-center">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                    {lang === 'ar' ? 'رمز الصعود — أعطه للسائق' : 'Boarding Code — Give to driver'}
+                  </p>
+                  <p className="text-4xl font-mono font-black text-primary tracking-[0.4em]">
+                    {booking.boarding_code}
+                  </p>
+                </div>
+              )}
 
+              {/* Route info compact */}
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <MapPin className="w-3 h-3 text-green-600 shrink-0" />
                 <span className="truncate">{lang === 'ar' ? route?.origin_name_ar : route?.origin_name_en}</span>
@@ -634,7 +689,7 @@ const TrackShuttle = () => {
 
               {/* Driver Info */}
               {(driver || driverApplication) && (
-                <div className="bg-surface rounded-xl p-3 space-y-2">
+                <div className="bg-surface rounded-xl p-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
                       {driver?.avatar_url ? (
@@ -649,32 +704,12 @@ const TrackShuttle = () => {
                         {driverApplication?.vehicle_model || shuttle?.vehicle_model} · {shuttle?.vehicle_plate}
                       </p>
                     </div>
-                    {(driverApplication?.phone || driver?.phone) && (
-                      <a href={`tel:${driverApplication?.phone || driver?.phone}`}>
-                        <Button variant="outline" size="icon" className="rounded-full w-9 h-9"><Phone className="w-4 h-4" /></Button>
-                      </a>
+                    {driverRating && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Star className="w-3 h-3 fill-secondary text-secondary" />
+                        <span>{driverRating.avg}</span>
+                      </div>
                     )}
-                  </div>
-                  {driverRating && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground ps-[52px]">
-                      <Star className="w-3 h-3 fill-secondary text-secondary" />
-                      <span>{driverRating.avg} ({driverRating.count} {lang === 'ar' ? 'تقييم' : 'ratings'})</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Boarding code */}
-              {booking.boarding_code && (
-                <div className="bg-surface rounded-xl p-3 flex items-center gap-3">
-                  <Key className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                      {lang === 'ar' ? 'رمز الصعود' : 'Boarding Code'}
-                    </p>
-                    <p className="text-xl font-mono font-bold text-foreground tracking-[0.3em]">
-                      {booking.boarding_code}
-                    </p>
                   </div>
                 </div>
               )}
@@ -684,6 +719,16 @@ const TrackShuttle = () => {
                 <span>{booking.scheduled_date} · {booking.scheduled_time}</span>
                 <span className="ms-auto font-semibold text-primary">{booking.total_price} EGP</span>
               </div>
+
+              {/* Exit Trip Button */}
+              <Button
+                variant="outline"
+                className="w-full border-destructive/30 text-destructive hover:bg-destructive/10 mt-2"
+                onClick={() => setShowExitStep1(true)}
+              >
+                <LogOut className="w-4 h-4 me-2" />
+                {lang === 'ar' ? 'الخروج من الرحلة' : 'Exit Trip'}
+              </Button>
             </div>
           </div>
         </div>
@@ -721,6 +766,73 @@ const TrackShuttle = () => {
           </div>
         </div>
       )}
+
+      {/* EXIT STEP 1 — First warning */}
+      <AlertDialog open={showExitStep1} onOpenChange={setShowExitStep1}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              {lang === 'ar' ? 'هل تريد الخروج من الرحلة؟' : 'Exit this trip?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {lang === 'ar'
+                ? 'إذا خرجت الآن سيتم إلغاء حجزك. لن تتمكن من الصعود في هذه الرحلة.'
+                : 'If you exit now, your booking will be cancelled. You will not be able to board this ride.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{lang === 'ar' ? 'البقاء' : 'Stay'}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                setShowExitStep1(false);
+                setShowExitStep2(true);
+              }}
+            >
+              {lang === 'ar' ? 'نعم، أريد الخروج' : 'Yes, I want to exit'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* EXIT STEP 2 — Final confirmation */}
+      <AlertDialog open={showExitStep2} onOpenChange={setShowExitStep2}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              {lang === 'ar' ? 'تأكيد نهائي' : 'Final Confirmation'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p className="font-semibold text-foreground">
+                {lang === 'ar' ? 'هذا الإجراء لا يمكن التراجع عنه!' : 'This action cannot be undone!'}
+              </p>
+              <p>
+                {lang === 'ar'
+                  ? '• سيتم إلغاء حجزك نهائيًا\n• سيتم إرسال طلب استرداد للمراجعة\n• لن تتمكن من العودة لهذه الرحلة'
+                  : '• Your booking will be permanently cancelled\n• A refund request will be submitted for review\n• You cannot rejoin this ride'}
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{lang === 'ar' ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                handleExitTrip();
+              }}
+              disabled={exiting}
+            >
+              {exiting
+                ? (lang === 'ar' ? 'جارٍ الخروج...' : 'Exiting...')
+                : (lang === 'ar' ? 'خروج نهائي من الرحلة' : 'Exit Trip Permanently')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
