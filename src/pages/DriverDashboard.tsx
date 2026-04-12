@@ -257,7 +257,7 @@ const DriverDashboard = () => {
         });
       }
     });
-    const { error } = await supabase.from('driver_schedules').insert(departureEntries);
+    const { error } = await supabase.from('driver_schedules').upsert(departureEntries, { onConflict: 'driver_id,route_id,day_of_week,departure_time' });
     if (error) toast({ title: t('auth.error'), description: error.message, variant: 'destructive' });
     else {
       toast({ title: lang === 'ar' ? 'تم حفظ الجدول!' : 'Schedule saved!' });
@@ -393,7 +393,7 @@ const DriverDashboard = () => {
       return_time: quickAddDir === 'return' ? quickAddTime : null,
       is_recurring: true, is_active: true, min_passengers: 5,
     };
-    const { error } = await supabase.from('driver_schedules').insert(entry);
+    const { error } = await supabase.from('driver_schedules').upsert(entry, { onConflict: 'driver_id,route_id,day_of_week,departure_time' });
     if (error) toast({ title: t('auth.error'), description: error.message, variant: 'destructive' });
     else {
       toast({ title: lang === 'ar' ? 'تمت إضافة الرحلة!' : 'Trip added!' });
@@ -557,32 +557,33 @@ const DriverDashboard = () => {
                   const tripSlots: TripSlot[] = [];
 
                   for (const s of driverSchedules) {
-                    const getNextDate = (targetDow: number) => {
-                      let offset = targetDow - todayDow;
+                    // Go trip
+                    if (s.departure_time) {
+                      let offset = s.day_of_week - todayDow;
                       if (offset < 0) offset += 7;
-                      if (offset === 0) return { offset: 0, dateStr: now.toISOString().split('T')[0] };
+                      // If today but time already passed, show next week's occurrence
+                      if (offset === 0 && s.departure_time?.slice(0, 5) < currentTime) offset = 7;
                       const d = new Date(now);
                       d.setDate(now.getDate() + offset);
-                      return { offset, dateStr: d.toISOString().split('T')[0] };
-                    };
-                    const { offset, dateStr } = getNextDate(s.day_of_week);
-
-                    // Go trip - always show, mark as past if needed
-                    if (s.departure_time) {
-                      const isPast = offset === 0 && s.departure_time?.slice(0, 5) < currentTime;
+                      const dateStr = d.toISOString().split('T')[0];
                       tripSlots.push({
                         scheduleId: s.id, routeId: s.route_id, routeInfo: s.routes,
                         day: s.day_of_week, time: s.departure_time?.slice(0, 5),
-                        direction: 'go', dayOffset: offset, dateStr, isPast,
+                        direction: 'go', dayOffset: offset, dateStr, isPast: false,
                       });
                     }
                     // Back trip
                     if (s.return_time) {
-                      const isPast = offset === 0 && s.return_time?.slice(0, 5) < currentTime;
+                      let offset = s.day_of_week - todayDow;
+                      if (offset < 0) offset += 7;
+                      if (offset === 0 && s.return_time?.slice(0, 5) < currentTime) offset = 7;
+                      const d = new Date(now);
+                      d.setDate(now.getDate() + offset);
+                      const dateStr = d.toISOString().split('T')[0];
                       tripSlots.push({
                         scheduleId: s.id, routeId: s.route_id, routeInfo: s.routes,
                         day: s.day_of_week, time: s.return_time?.slice(0, 5),
-                        direction: 'back', dayOffset: offset, dateStr, isPast,
+                        direction: 'back', dayOffset: offset, dateStr, isPast: false,
                       });
                     }
                   }
