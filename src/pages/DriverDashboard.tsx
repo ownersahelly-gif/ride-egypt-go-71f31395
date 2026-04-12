@@ -17,7 +17,7 @@ import MapView from '@/components/MapView';
 import RideChat from '@/components/RideChat';
 import { useRef } from 'react';
 
-type TabType = 'home' | 'schedule' | 'trips';
+type TabType = 'home' | 'schedule' | 'trips' | 'earnings';
 
 // Driver dashboard component
 const DriverDashboard = () => {
