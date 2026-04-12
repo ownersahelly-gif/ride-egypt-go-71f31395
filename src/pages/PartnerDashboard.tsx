@@ -158,7 +158,6 @@ const PartnerDashboard = () => {
           </button>
         </div>
       </div>
-    </div>
   );
 
   const pendingEarnings = earnings.filter(e => e.status === 'pending').reduce((s, e) => s + Number(e.amount), 0);
@@ -242,26 +241,20 @@ const PartnerDashboard = () => {
           <h2 className="text-xl font-bold text-foreground mb-2">{lang === 'ar' ? 'طلبك قيد المراجعة' : 'Application Under Review'}</h2>
           <p className="text-muted-foreground">{lang === 'ar' ? 'سنراجع طلبك ونتواصل معك قريبًا' : 'We\'ll review your application and get back to you soon.'}</p>
         </div>
-        <BottomNav />
+      </div>
       </div>
     );
   }
 
   if (partner.status === 'rejected') {
     return (
-      <div className="min-h-screen bg-background pb-24">
-        <div className="bg-primary text-primary-foreground px-4 pt-12 pb-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Link to="/dashboard" className="p-2 rounded-full bg-primary-foreground/10"><Back className="w-5 h-5" /></Link>
-            <h1 className="text-xl font-bold">{lang === 'ar' ? 'برنامج الشراكة' : 'Partner Program'}</h1>
-          </div>
-        </div>
+      <div className="min-h-screen bg-background overflow-y-auto">
+        <PartnerHeader title={lang === 'ar' ? 'برنامج الشراكة' : 'Partner Program'} />
         <div className="px-4 py-8 max-w-md mx-auto text-center">
           <XCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
           <h2 className="text-xl font-bold text-foreground mb-2">{lang === 'ar' ? 'تم رفض طلبك' : 'Application Rejected'}</h2>
           {partner.notes && <p className="text-muted-foreground">{partner.notes}</p>}
         </div>
-        <BottomNav />
       </div>
     );
   }
