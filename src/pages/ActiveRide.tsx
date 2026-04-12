@@ -14,7 +14,7 @@ import {
   ChevronLeft, ChevronRight, Users, MapPin, MessageCircle,
   CheckCircle2, Navigation, Loader2, UserCheck, LogOut as DropOff,
   Phone, Clock, AlertCircle, Flag, SkipForward, ArrowRight, Undo2,
-  ExternalLink, DollarSign
+  ExternalLink, DollarSign, TrendingUp, X
 } from 'lucide-react';
 
 interface RouteStop {
@@ -79,7 +79,9 @@ const ActiveRide = () => {
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [arrivedAt, setArrivedAt] = useState<number | null>(null);
   const [waitSeconds, setWaitSeconds] = useState(0);
-  const [waitTimeMinutes, setWaitTimeMinutes] = useState(1); // default 1 min, fetched from app_settings
+  const [waitTimeMinutes, setWaitTimeMinutes] = useState(1);
+  const [showEndRideDialog, setShowEndRideDialog] = useState(false);
+  const [showEarningsSummary, setShowEarningsSummary] = useState(false);
   const reachedStopsRef = useRef<Set<number>>(new Set());
 
   const fetchData = useCallback(async () => {
@@ -176,6 +178,23 @@ const ActiveRide = () => {
   }, [user]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Real-time booking subscription — auto-refresh when bookings change
+  useEffect(() => {
+    if (!shuttle?.id) return;
+    const channel = supabase
+      .channel(`active-ride-bookings-${shuttle.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'bookings',
+        filter: `shuttle_id=eq.${shuttle.id}`,
+      }, () => {
+        fetchData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [shuttle?.id, fetchData]);
 
   // Find nearest route stop to a given lat/lng
   const findNearestStop = useCallback((lat: number, lng: number): RouteStop | null => {
@@ -585,8 +604,15 @@ const ActiveRide = () => {
       await supabase.from('shuttles').update({ status: 'inactive' }).eq('id', shuttle.id);
     }
     setBookings(prev => prev.map(b => b.status === 'boarded' ? { ...b, status: 'completed', dropped_off_at: now } : b));
-    toast({ title: lang === 'ar' ? 'تم إنهاء الرحلة ✓' : 'Ride completed! ✓' });
+    setShowEndRideDialog(false);
+    setShowEarningsSummary(true);
   };
+
+  // Earnings calculation
+  const totalEarnings = bookings.filter(b => b.status === 'completed').reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
+  const cashEarnings = bookings.filter(b => b.status === 'completed' && !b.payment_proof_url).reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
+  const onlineEarnings = bookings.filter(b => b.status === 'completed' && b.payment_proof_url).reduce((s, b) => s + parseFloat(b.total_price || 0), 0);
+  const completedCount = bookings.filter(b => b.status === 'completed').length;
 
   // IDs of stops that actually have booked passengers
   const bookedStopIds = new Set<string>();
@@ -988,12 +1014,86 @@ const ActiveRide = () => {
       {/* Complete Ride button */}
       {boardedCount > 0 && !allCompleted && (
         <div className="border-t border-border bg-card p-4">
-          <Button className="w-full" size="lg" variant="destructive" onClick={completeRide}>
+          <Button className="w-full" size="lg" variant="destructive" onClick={() => setShowEndRideDialog(true)}>
             <Flag className="w-5 h-5 me-2" />
             {lang === 'ar'
               ? `إنهاء الرحلة (${boardedCount} راكب)`
               : `Complete Ride (${boardedCount} passengers)`}
           </Button>
+        </div>
+      )}
+
+      {/* End Ride Confirmation Dialog */}
+      {showEndRideDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-card border border-border rounded-2xl p-6 w-[90%] max-w-sm shadow-xl space-y-4">
+            <div className="text-center">
+              <Flag className="w-12 h-12 text-destructive mx-auto mb-2" />
+              <h3 className="text-lg font-bold text-foreground">
+                {lang === 'ar' ? 'إنهاء الرحلة؟' : 'End Ride?'}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {lang === 'ar'
+                  ? `سيتم إنزال ${boardedCount} راكب وإنهاء الرحلة.`
+                  : `This will drop off ${boardedCount} passenger${boardedCount > 1 ? 's' : ''} and end the ride.`}
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setShowEndRideDialog(false)}>
+                {lang === 'ar' ? 'لا، ارجع' : 'No, Go Back'}
+              </Button>
+              <Button variant="destructive" className="flex-1" onClick={completeRide}>
+                {lang === 'ar' ? 'نعم، أنهِ الرحلة' : 'Yes, End Ride'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Earnings Summary Modal */}
+      {showEarningsSummary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-card border border-border rounded-2xl p-6 w-[90%] max-w-sm shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-primary" />
+                {lang === 'ar' ? 'ملخص الرحلة' : 'Ride Summary'}
+              </h3>
+              <Button variant="ghost" size="icon" onClick={() => setShowEarningsSummary(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="text-center py-4">
+              <p className="text-4xl font-bold text-primary">{totalEarnings} EGP</p>
+              <p className="text-sm text-muted-foreground mt-1">{lang === 'ar' ? 'إجمالي أرباح اليوم' : "Today's Total Earnings"}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-surface rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-foreground">{completedCount}</p>
+                <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'راكب' : 'Passengers'}</p>
+              </div>
+              <div className="bg-surface rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-foreground">{activeStops.length}</p>
+                <p className="text-xs text-muted-foreground">{lang === 'ar' ? 'توقف' : 'Stops'}</p>
+              </div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{lang === 'ar' ? '💵 كاش' : '💵 Cash'}</span>
+                <span className="font-medium text-foreground">{cashEarnings} EGP</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">{lang === 'ar' ? '📱 إلكتروني' : '📱 Online'}</span>
+                <span className="font-medium text-foreground">{onlineEarnings} EGP</span>
+              </div>
+            </div>
+            <Link to="/driver-dashboard" className="block">
+              <Button className="w-full" size="lg">
+                <CheckCircle2 className="w-4 h-4 me-2" />
+                {lang === 'ar' ? 'العودة للرئيسية' : 'Back to Dashboard'}
+              </Button>
+            </Link>
+          </div>
         </div>
       )}
 

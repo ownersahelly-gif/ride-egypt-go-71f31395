@@ -39,7 +39,7 @@ const BookRide = () => {
   const [loading, setLoading] = useState(false);
   const [allRouteStops, setAllRouteStops] = useState<Record<string, any[]>>({});
   const [driverRatings, setDriverRatings] = useState<Record<string, { avg: number; count: number }>>({});
-  const [step, setStep] = useState<'browse' | 'details'>('browse');
+  const [step, setStep] = useState<'browse' | 'details' | 'confirm'>('browse');
 
   // Pickup
   const [pickupMode, setPickupMode] = useState<'start' | 'stop'>('start');
@@ -1149,38 +1149,16 @@ const BookRide = () => {
               </div>
             )}
 
-            {/* Summary & Book */}
+            {/* Review & Continue */}
             <div className="bg-card border border-border rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm text-muted-foreground">
-                  {tripDirection === 'both' ? (lang === 'ar' ? 'ذهاب وعودة' : 'Round Trip') : tripDirection === 'go' ? (lang === 'ar' ? 'ذهاب فقط' : 'Going Only') : (lang === 'ar' ? 'عودة فقط' : 'Return Only')}
-                </span>
-                {useBundle ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground line-through">{tripDirection === 'both' ? dynamicPrice * 2 : dynamicPrice} EGP</span>
-                    <span className="text-lg font-bold text-secondary">{lang === 'ar' ? 'من الباقة' : 'Bundle'}</span>
-                  </div>
-                ) : (
-                  <span className="text-lg font-bold text-primary">{tripDirection === 'both' ? dynamicPrice * 2 : dynamicPrice} EGP</span>
-                )}
-              </div>
-              {tripDirection === 'both' && !useBundle && (
-                <p className="text-[10px] text-muted-foreground mb-2">{lang === 'ar' ? `${dynamicPrice} × 2 رحلة` : `${dynamicPrice} × 2 trips`}</p>
-              )}
-
               {!isRideFull ? (
-                <Button className="w-full mt-3" size="lg" onClick={() => handleBook(false)}
-                  disabled={loading || !isPickupValid || !isDropoffValid || (!useBundle && !paymentProof)}>
-                  {loading ? (
-                    <><Loader2 className="w-4 h-4 me-1 animate-spin" />{lang === 'ar' ? 'جاري الحجز...' : 'Booking...'}</>
-                  ) : useBundle ? (
-                    <><Package className="w-4 h-4 me-1" />{lang === 'ar' ? 'احجز من الباقة' : 'Book from Bundle'}</>
-                  ) : (
-                    lang === 'ar' ? 'تأكيد الحجز' : 'Confirm Booking'
-                  )}
+                <Button className="w-full" size="lg" onClick={() => setStep('confirm')}
+                  disabled={!isPickupValid || !isDropoffValid || (!useBundle && !paymentProof)}>
+                  {lang === 'ar' ? 'مراجعة الحجز' : 'Review Booking'}
+                  <ArrowRight className="w-4 h-4 ms-1" />
                 </Button>
               ) : (
-                <div className="space-y-3 mt-3">
+                <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-destructive font-medium p-2 bg-destructive/10 rounded-lg">
                     <AlertCircle className="w-4 h-4" />
                     {lang === 'ar' ? 'الرحلة مكتملة العدد' : 'This ride is full'}
@@ -1195,6 +1173,95 @@ const BookRide = () => {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ========== CONFIRMATION STEP ========== */}
+        {step === 'confirm' && selectedRide && (
+          <div className="space-y-5">
+            <button onClick={() => setStep('details')}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+              <Back className="w-4 h-4" />{lang === 'ar' ? 'تعديل التفاصيل' : 'Edit Details'}
+            </button>
+
+            <div className="bg-card border-2 border-primary rounded-2xl p-5 space-y-4">
+              <h2 className="text-lg font-bold text-foreground text-center">
+                {lang === 'ar' ? '📋 مراجعة الحجز' : '📋 Booking Summary'}
+              </h2>
+
+              {/* Route */}
+              <div className="bg-surface rounded-xl p-4 space-y-2">
+                <p className="font-semibold text-foreground">{lang === 'ar' ? selectedRide.routes?.name_ar : selectedRide.routes?.name_en}</p>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <MapPin className="w-3.5 h-3.5 text-green-500" />
+                  <span>{pickupMode === 'stop' && selectedPickupStop ? (lang === 'ar' ? selectedPickupStop.name_ar : selectedPickupStop.name_en) : (lang === 'ar' ? selectedRide.routes?.origin_name_ar : selectedRide.routes?.origin_name_en)}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <MapPin className="w-3.5 h-3.5 text-destructive" />
+                  <span>{dropoffMode === 'stop' && selectedDropoffStop ? (lang === 'ar' ? selectedDropoffStop.name_ar : selectedDropoffStop.name_en) : (lang === 'ar' ? selectedRide.routes?.destination_name_ar : selectedRide.routes?.destination_name_en)}</span>
+                </div>
+              </div>
+
+              {/* Date & Time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-surface rounded-xl p-3 text-center">
+                  <Calendar className="w-4 h-4 mx-auto text-muted-foreground mb-1" />
+                  <p className="text-sm font-medium text-foreground">{selectedRide.ride_date}</p>
+                </div>
+                <div className="bg-surface rounded-xl p-3 text-center">
+                  <Clock className="w-4 h-4 mx-auto text-muted-foreground mb-1" />
+                  <p className="text-sm font-medium text-foreground">{selectedRide.departure_time?.slice(0, 5)}</p>
+                </div>
+              </div>
+
+              {/* Driver */}
+              <div className="flex items-center gap-3 bg-surface rounded-xl p-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                  {driverProfile?.avatar_url ? (
+                    <img src={driverProfile.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <UserIcon className="w-5 h-5 text-primary" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{driverProfile?.full_name || (lang === 'ar' ? 'سائق' : 'Driver')}</p>
+                  <p className="text-xs text-muted-foreground">{shuttleInfo?.vehicle_model} · {shuttleInfo?.vehicle_plate}</p>
+                </div>
+              </div>
+
+              {/* Trip Type */}
+              <div className="bg-surface rounded-xl p-3 flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  {tripDirection === 'both' ? (lang === 'ar' ? 'ذهاب وعودة' : 'Round Trip') : tripDirection === 'go' ? (lang === 'ar' ? 'ذهاب فقط' : 'Going Only') : (lang === 'ar' ? 'عودة فقط' : 'Return Only')}
+                </span>
+                {useBundle ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground line-through">{tripDirection === 'both' ? dynamicPrice * 2 : dynamicPrice} EGP</span>
+                    <span className="text-lg font-bold text-secondary">{lang === 'ar' ? 'من الباقة' : 'Bundle'}</span>
+                  </div>
+                ) : (
+                  <span className="text-lg font-bold text-primary">{tripDirection === 'both' ? dynamicPrice * 2 : dynamicPrice} EGP</span>
+                )}
+              </div>
+
+              {/* Payment Method */}
+              <div className="bg-surface rounded-xl p-3 flex items-center gap-2 text-sm">
+                <ImageIcon className="w-4 h-4 text-primary" />
+                <span className="text-foreground font-medium">
+                  {useBundle ? (lang === 'ar' ? 'الدفع من الباقة' : 'Paid from bundle') : (lang === 'ar' ? 'InstaPay — إثبات مرفق ✓' : 'InstaPay — Proof attached ✓')}
+                </span>
+              </div>
+            </div>
+
+            {/* Confirm Button */}
+            <Button className="w-full" size="lg" onClick={() => handleBook(false)}
+              disabled={loading}>
+              {loading ? (
+                <><Loader2 className="w-4 h-4 me-1 animate-spin" />{lang === 'ar' ? 'جاري الحجز...' : 'Booking...'}</>
+              ) : (
+                <>{lang === 'ar' ? '✓ تأكيد الحجز' : '✓ Confirm Booking'}</>
+              )}
+            </Button>
           </div>
         )}
         </div>
