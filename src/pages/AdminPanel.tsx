@@ -180,8 +180,22 @@ const AdminPanel = () => {
     else toast.success(lang === 'ar' ? 'تم حفظ رقم InstaPay' : 'InstaPay number saved');
     setSavingPhone(false);
   };
+  const saveAppName = async () => {
+    setSavingAppName(true);
+    const { error: e1 } = await supabase.from('app_settings').upsert(
+      { key: 'app_name_en', value: appNameEnSetting },
+      { onConflict: 'key' }
+    );
+    const { error: e2 } = await supabase.from('app_settings').upsert(
+      { key: 'app_name_ar', value: appNameArSetting },
+      { onConflict: 'key' }
+    );
+    if (e1 || e2) toast.error((e1 || e2)!.message);
+    else toast.success(lang === 'ar' ? 'تم حفظ اسم التطبيق - أعد تحميل الصفحة لرؤية التغييرات' : 'App name saved - reload the page to see changes');
+    setSavingAppName(false);
+  };
 
-  const createRoute = async () => {
+
     const routeData = {
       ...routeForm,
       description_en: `${routeForm.origin_name_en} to ${routeForm.destination_name_en}`,
