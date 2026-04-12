@@ -30,7 +30,6 @@ async function getAccessToken(serviceAccount: any): Promise<string> {
   const payloadB64 = encode(payload);
   const signInput = `${headerB64}.${payloadB64}`;
 
-  // Import the private key
   const pemContents = serviceAccount.private_key
     .replace(/-----BEGIN PRIVATE KEY-----/, "")
     .replace(/-----END PRIVATE KEY-----/, "")
@@ -58,7 +57,6 @@ async function getAccessToken(serviceAccount: any): Promise<string> {
 
   const jwt = `${signInput}.${sigB64}`;
 
-  // Exchange JWT for access token
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -72,6 +70,52 @@ async function getAccessToken(serviceAccount: any): Promise<string> {
   return tokenData.access_token;
 }
 
+// Helper to send FCM push to a list of tokens
+async function sendFCM(
+  tokens: { token: string; platform: string }[],
+  notification: { title: string; body: string },
+  data: Record<string, string>
+) {
+  const serviceAccountJson = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON");
+  if (!serviceAccountJson) return;
+
+  const serviceAccount = JSON.parse(serviceAccountJson);
+  const accessToken = await getAccessToken(serviceAccount);
+  const projectId = serviceAccount.project_id;
+
+  for (const tokenEntry of tokens) {
+    const message = {
+      message: {
+        token: tokenEntry.token,
+        notification,
+        data,
+        ...(tokenEntry.platform === "ios"
+          ? { apns: { payload: { aps: { sound: "default", badge: 1 } } } }
+          : { android: { priority: "high", notification: { sound: "default" } } }),
+      },
+    };
+
+    const res = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(message),
+      }
+    );
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`FCM send failed for token ${tokenEntry.token}: ${errText}`);
+    } else {
+      await res.text();
+    }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -83,8 +127,48 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { type, record } = await req.json();
+    const { type, record, notification_type } = await req.json();
 
+    // ── Waitlist promotion notification ──
+    if (notification_type === "waitlist_promoted" && record?.id && record?.user_id) {
+      const userId = record.user_id;
+      const bookingId = record.id;
+
+      const { data: tokens } = await supabase
+        .from("device_tokens")
+        .select("token, platform")
+        .eq("user_id", userId);
+
+      if (!tokens || tokens.length === 0) {
+        return new Response(
+          JSON.stringify({ message: "No device tokens for user" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      let routeName = "your route";
+      if (record.route_id) {
+        const { data: route } = await supabase
+          .from("routes")
+          .select("name_en")
+          .eq("id", record.route_id)
+          .single();
+        if (route) routeName = route.name_en;
+      }
+
+      await sendFCM(
+        tokens,
+        { title: "🎉 You're confirmed!", body: `A seat opened up on ${routeName}. Your booking is now confirmed!` },
+        { booking_id: bookingId, type: "waitlist_promoted" }
+      );
+
+      return new Response(
+        JSON.stringify({ message: "Waitlist promotion notification sent", userId, bookingId }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── Ride message notification ──
     if (type === "INSERT" && record?.booking_id && record?.sender_id) {
       const bookingId = record.booking_id;
       const senderId = record.sender_id;
@@ -144,59 +228,17 @@ Deno.serve(async (req) => {
 
       const senderName = senderProfile?.full_name || "Someone";
 
-      // Use FCM v1 API with service account
-      const serviceAccountJson = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON");
-
-      if (serviceAccountJson) {
-        const serviceAccount = JSON.parse(serviceAccountJson);
-        const accessToken = await getAccessToken(serviceAccount);
-        const projectId = serviceAccount.project_id;
-
-        for (const tokenEntry of tokens) {
-          const message = {
-            message: {
-              token: tokenEntry.token,
-              notification: {
-                title: `New message from ${senderName}`,
-                body: record.message?.substring(0, 100) || "New message",
-              },
-              data: {
-                booking_id: bookingId,
-                type: "ride_message",
-              },
-              ...(tokenEntry.platform === "ios"
-                ? { apns: { payload: { aps: { sound: "default", badge: 1 } } } }
-                : { android: { priority: "high", notification: { sound: "default" } } }),
-            },
-          };
-
-          const res = await fetch(
-            `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify(message),
-            }
-          );
-
-          if (!res.ok) {
-            const errText = await res.text();
-            console.error(`FCM send failed for token ${tokenEntry.token}: ${errText}`);
-          } else {
-            await res.text(); // consume body
-          }
-        }
-      }
+      await sendFCM(
+        tokens,
+        { title: `New message from ${senderName}`, body: record.message?.substring(0, 100) || "New message" },
+        { booking_id: bookingId, type: "ride_message" }
+      );
 
       return new Response(
         JSON.stringify({
           message: "Notification processed",
           recipient: recipientId,
           tokenCount: tokens.length,
-          fcmConfigured: !!serviceAccountJson,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
