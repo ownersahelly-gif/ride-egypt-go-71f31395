@@ -1326,14 +1326,22 @@ const DriverDashboard = () => {
                     const first = group[0];
                     const routeObj = first.routes;
                     const isExpanded = expandedTrips.has(key);
+                    const allBookings = group; // Keep all bookings visible including cancelled
                     const activeBookings = group.filter((b: any) => b.status !== 'cancelled');
                     const routeOrigin = { lat: routeObj?.origin_lat || 0, lng: routeObj?.origin_lng || 0 };
                     const routeDestination = { lat: routeObj?.destination_lat || 0, lng: routeObj?.destination_lng || 0 };
                     const optimizedOrder = isExpanded ? optimizePassengerOrder(activeBookings, routeOrigin, routeDestination) : [];
                     const validWaypoints = optimizedOrder.filter(wp => wp.coords.lat !== 0 && wp.coords.lng !== 0);
 
+                    // Check if this trip is expired (30+ min past departure)
+                    const [expH, expM] = (first.scheduled_time || '00:00').split(':').map(Number);
+                    const expDep = new Date(first.scheduled_date + 'T00:00:00');
+                    expDep.setHours(expH, expM, 0);
+                    const tripIsExpired = (Date.now() - expDep.getTime()) > 30 * 60 * 1000;
+                    const tripIsPast = first.scheduled_date < new Date().toISOString().split('T')[0];
+
                     return (
-                      <div key={key} className="bg-card border border-border rounded-2xl overflow-hidden">
+                      <div key={key} className={`bg-card border rounded-2xl overflow-hidden ${tripIsExpired || tripIsPast ? 'border-destructive/30' : 'border-border'}`}>
                         <button onClick={() => toggleTrip(key)} className="w-full flex items-center justify-between p-4 text-start hover:bg-muted/30 transition-colors">
                           <div className="flex-1">
                             <p className="font-semibold text-foreground text-sm">{lang === 'ar' ? routeObj?.name_ar : routeObj?.name_en}</p>
@@ -1345,7 +1353,11 @@ const DriverDashboard = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className={`text-xs px-2 py-1 rounded-full ${statusColors[first.status]}`}>{t(`booking.status.${first.status}`)}</span>
+                            {(tripIsExpired || tripIsPast) ? (
+                              <span className="text-xs px-2 py-1 rounded-full bg-destructive/10 text-destructive">{lang === 'ar' ? 'ملغي' : 'Cancelled'}</span>
+                            ) : (
+                              <span className={`text-xs px-2 py-1 rounded-full ${statusColors[first.status]}`}>{t(`booking.status.${first.status}`)}</span>
+                            )}
                             {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                           </div>
                         </button>
