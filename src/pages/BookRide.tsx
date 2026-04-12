@@ -596,7 +596,7 @@ const BookRide = () => {
                       : 'bg-card text-foreground border-border hover:border-primary/50'
                   }`}
                 >
-                  <MapPin className="w-3 h-3 shrink-0" />
+                  <span className="shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center">{stop.stop_order + 1}</span>
                   <span className="truncate">{lang === 'ar' ? stop.name_ar : stop.name_en}</span>
                 </button>
               ))}
@@ -604,7 +604,7 @@ const BookRide = () => {
             {selectedStop && (
               <div className="flex items-center gap-2 text-xs p-2 rounded-lg bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400">
                 <CheckCircle2 className="w-3 h-3" />
-                <span className="font-medium">{lang === 'ar' ? selectedStop.name_ar : selectedStop.name_en} ✓</span>
+                <span className="font-medium">#{selectedStop.stop_order + 1} {lang === 'ar' ? selectedStop.name_ar : selectedStop.name_en} ✓</span>
               </div>
             )}
           </div>
