@@ -378,7 +378,14 @@ const translations: Record<Language, Record<string, string>> = {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [lang, setLang] = useState<Language>('ar');
+  const [lang, setLangState] = useState<Language>(() => {
+    const saved = localStorage.getItem('massar_lang');
+    return (saved === 'en' || saved === 'ar') ? saved : 'ar';
+  });
+  const setLang = (l: Language) => {
+    setLangState(l);
+    localStorage.setItem('massar_lang', l);
+  };
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const { appNameEn, appNameAr } = useAppName();
 

@@ -130,6 +130,9 @@ const Dashboard = () => {
       if (partnerData) {
         setIsPartner(true);
         setPartnerStatus(partnerData.status);
+        // Partners go straight to partner dashboard
+        navigate('/partner');
+        return;
       }
       const driverFlag = profileData?.user_type === 'driver' || roles.includes('moderator');
       setIsDriver(driverFlag);

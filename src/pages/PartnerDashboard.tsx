@@ -7,19 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import BottomNav from '@/components/BottomNav';
 import PlacesAutocomplete from '@/components/PlacesAutocomplete';
 import {
   Building2, Link2, Copy, Users, DollarSign, Route, Plus, Loader2,
-  CheckCircle2, Clock, XCircle, ChevronLeft, ChevronRight, MapPin, Trash2
+  CheckCircle2, Clock, XCircle, ChevronLeft, ChevronRight, MapPin, Trash2,
+  Globe, LogOut, User
 } from 'lucide-react';
 
 const PartnerDashboard = () => {
-  const { user } = useAuth();
-  const { lang, appName } = useLanguage();
+  const { user, signOut } = useAuth();
+  const { lang, setLang, appName } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const Back = lang === 'ar' ? ChevronRight : ChevronLeft;
+  
 
   const [loading, setLoading] = useState(true);
   const [partner, setPartner] = useState<any>(null);
@@ -140,9 +140,31 @@ const PartnerDashboard = () => {
     navigator.clipboard.writeText(link);
     toast({ title: lang === 'ar' ? 'تم نسخ الرابط!' : 'Link copied!' });
   };
+  const handleSignOut = async () => { await signOut(); navigate('/'); };
+
+  const PartnerHeader = ({ title, subtitle }: { title: string; subtitle?: string }) => (
+    <div className="bg-primary text-primary-foreground px-4 pt-12 pb-8">
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-xl font-bold">{title}</h1>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} className="p-2 rounded-full bg-primary-foreground/10">
+            <Globe className="w-5 h-5" />
+          </button>
+          <Link to="/profile" className="p-2 rounded-full bg-primary-foreground/10">
+            <User className="w-5 h-5" />
+          </Link>
+          <button onClick={handleSignOut} className="p-2 rounded-full bg-primary-foreground/10">
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+      {subtitle && <p className="text-sm opacity-80">{subtitle}</p>}
+    </div>
+  );
+
+  const pendingEarnings = earnings.filter(e => e.status === 'pending').reduce((s, e) => s + Number(e.amount), 0);
 
   const totalEarnings = earnings.reduce((s, e) => s + Number(e.amount), 0);
-  const pendingEarnings = earnings.filter(e => e.status === 'pending').reduce((s, e) => s + Number(e.amount), 0);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -151,13 +173,8 @@ const PartnerDashboard = () => {
   // No partner account yet
   if (!partner) {
     return (
-      <div className="min-h-screen bg-background pb-24">
-        <div className="bg-primary text-primary-foreground px-4 pt-12 pb-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Link to="/dashboard" className="p-2 rounded-full bg-primary-foreground/10"><Back className="w-5 h-5" /></Link>
-            <h1 className="text-xl font-bold">{lang === 'ar' ? 'برنامج الشراكة' : 'Partner Program'}</h1>
-          </div>
-        </div>
+      <div className="min-h-screen bg-background overflow-y-auto">
+        <PartnerHeader title={lang === 'ar' ? 'برنامج الشراكة' : 'Partner Program'} />
 
         <div className="px-4 py-8 max-w-md mx-auto">
           {!showApply ? (
@@ -210,7 +227,6 @@ const PartnerDashboard = () => {
             </div>
           )}
         </div>
-        <BottomNav />
       </div>
     );
   }
@@ -218,54 +234,37 @@ const PartnerDashboard = () => {
   // Pending approval
   if (partner.status === 'pending') {
     return (
-      <div className="min-h-screen bg-background pb-24">
-        <div className="bg-primary text-primary-foreground px-4 pt-12 pb-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Link to="/dashboard" className="p-2 rounded-full bg-primary-foreground/10"><Back className="w-5 h-5" /></Link>
-            <h1 className="text-xl font-bold">{lang === 'ar' ? 'برنامج الشراكة' : 'Partner Program'}</h1>
-          </div>
-        </div>
+      <div className="min-h-screen bg-background overflow-y-auto">
+        <PartnerHeader title={lang === 'ar' ? 'برنامج الشراكة' : 'Partner Program'} />
         <div className="px-4 py-8 max-w-md mx-auto text-center">
           <Clock className="w-16 h-16 text-amber-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-foreground mb-2">{lang === 'ar' ? 'طلبك قيد المراجعة' : 'Application Under Review'}</h2>
           <p className="text-muted-foreground">{lang === 'ar' ? 'سنراجع طلبك ونتواصل معك قريبًا' : 'We\'ll review your application and get back to you soon.'}</p>
         </div>
-        <BottomNav />
       </div>
     );
   }
 
   if (partner.status === 'rejected') {
     return (
-      <div className="min-h-screen bg-background pb-24">
-        <div className="bg-primary text-primary-foreground px-4 pt-12 pb-8">
-          <div className="flex items-center gap-3 mb-6">
-            <Link to="/dashboard" className="p-2 rounded-full bg-primary-foreground/10"><Back className="w-5 h-5" /></Link>
-            <h1 className="text-xl font-bold">{lang === 'ar' ? 'برنامج الشراكة' : 'Partner Program'}</h1>
-          </div>
-        </div>
+      <div className="min-h-screen bg-background overflow-y-auto">
+        <PartnerHeader title={lang === 'ar' ? 'برنامج الشراكة' : 'Partner Program'} />
         <div className="px-4 py-8 max-w-md mx-auto text-center">
           <XCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
           <h2 className="text-xl font-bold text-foreground mb-2">{lang === 'ar' ? 'تم رفض طلبك' : 'Application Rejected'}</h2>
           {partner.notes && <p className="text-muted-foreground">{partner.notes}</p>}
         </div>
-        <BottomNav />
       </div>
     );
   }
 
   // Active partner dashboard
   return (
-    <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
-      <div className="bg-primary text-primary-foreground px-4 pt-12 pb-8">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/dashboard" className="p-2 rounded-full bg-primary-foreground/10"><Back className="w-5 h-5" /></Link>
-          <h1 className="text-xl font-bold">{lang === 'ar' ? 'لوحة الشريك' : 'Partner Dashboard'}</h1>
-        </div>
-        <p className="text-sm opacity-80">{partner.name}</p>
-        <p className="text-xs opacity-60">{lang === 'ar' ? `النسبة: ${partner.commission_percentage}%` : `Commission: ${partner.commission_percentage}%`}</p>
-      </div>
+    <div className="min-h-screen bg-background overflow-y-auto">
+      <PartnerHeader
+        title={lang === 'ar' ? 'لوحة الشريك' : 'Partner Dashboard'}
+        subtitle={`${partner.name} — ${lang === 'ar' ? `النسبة: ${partner.commission_percentage}%` : `Commission: ${partner.commission_percentage}%`}`}
+      />
 
       <div className="px-4 py-6 space-y-6">
         {/* Referral Link */}
@@ -474,7 +473,6 @@ const PartnerDashboard = () => {
           </div>
         )}
       </div>
-      <BottomNav />
     </div>
   );
 };
