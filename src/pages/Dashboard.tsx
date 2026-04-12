@@ -708,6 +708,19 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* Partner Banner */}
+      {isPartner && (
+        <Link to="/partner" className={`block px-4 py-2.5 text-sm text-center font-medium shrink-0 ${
+          partnerStatus === 'approved' ? 'bg-green-100 text-green-700' : partnerStatus === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-destructive/10 text-destructive'
+        }`}>
+          {partnerStatus === 'approved'
+            ? (lang === 'ar' ? '🏢 لوحة الشريك — اضغط لإدارة شركتك' : '🏢 Partner Dashboard — tap to manage')
+            : partnerStatus === 'pending'
+            ? (lang === 'ar' ? '⏳ طلب الشراكة قيد المراجعة — اضغط للتفاصيل' : '⏳ Partner application under review — tap for details')
+            : (lang === 'ar' ? '❌ تم رفض طلب الشراكة — اضغط للتفاصيل' : '❌ Partner application rejected — tap for details')}
+        </Link>
+      )}
+
       <div className="flex-1 min-h-0 relative">
         <MapView
           className="h-full w-full rounded-none"
