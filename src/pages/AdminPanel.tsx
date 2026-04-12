@@ -1574,6 +1574,7 @@ const AdminPanel = () => {
                         <th className="text-start p-3 font-medium text-muted-foreground">{lang === 'ar' ? 'الهاتف' : 'Phone'}</th>
                         <th className="text-start p-3 font-medium text-muted-foreground">{lang === 'ar' ? 'النوع' : 'Type'}</th>
                         <th className="text-start p-3 font-medium text-muted-foreground">{lang === 'ar' ? 'تاريخ التسجيل' : 'Joined'}</th>
+                        <th className="text-start p-3 font-medium text-muted-foreground">{lang === 'ar' ? 'إجراءات' : 'Actions'}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1587,6 +1588,58 @@ const AdminPanel = () => {
                             </span>
                           </td>
                           <td className="p-3 text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</td>
+                          <td className="p-3">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              disabled={p.user_id === user?.id}
+                              onClick={async () => {
+                                const confirmMsg = lang === 'ar'
+                                  ? `هل أنت متأكد من حذف المستخدم "${p.full_name || p.user_id}"؟ سيتم حذف جميع بياناته نهائياً.`
+                                  : `Are you sure you want to permanently delete user "${p.full_name || p.user_id}"? All their data, bookings, and files will be removed.`;
+                                if (!window.confirm(confirmMsg)) return;
+
+                                const secondConfirm = lang === 'ar'
+                                  ? 'تأكيد نهائي: هذا الإجراء لا يمكن التراجع عنه. متابعة؟'
+                                  : 'Final confirmation: This action cannot be undone. Continue?';
+                                if (!window.confirm(secondConfirm)) return;
+
+                                try {
+                                  toast.loading(lang === 'ar' ? 'جاري حذف المستخدم...' : 'Deleting user...', { id: 'delete-user' });
+                                  const { data: { session } } = await supabase.auth.getSession();
+                                  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                                  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+                                  const res = await fetch(`${supabaseUrl}/functions/v1/delete-user`, {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      Authorization: `Bearer ${session?.access_token || anonKey}`,
+                                      apikey: anonKey,
+                                    },
+                                    body: JSON.stringify({ user_id: p.user_id }),
+                                  });
+
+                                  const result = await res.json();
+                                  if (!res.ok) throw new Error(result.error || 'Failed to delete user');
+
+                                  toast.success(
+                                    lang === 'ar' ? 'تم حذف المستخدم بنجاح' : 'User deleted successfully',
+                                    { id: 'delete-user', description: lang === 'ar' ? `تم حذف ${result.bunny_files_deleted} ملف` : `${result.bunny_files_deleted} files removed` }
+                                  );
+                                  setAllProfiles(prev => prev.filter(pr => pr.user_id !== p.user_id));
+                                } catch (err: any) {
+                                  toast.error(lang === 'ar' ? 'فشل حذف المستخدم' : 'Failed to delete user', {
+                                    id: 'delete-user',
+                                    description: err.message,
+                                  });
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
