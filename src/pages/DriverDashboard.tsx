@@ -1303,7 +1303,7 @@ const DriverDashboard = () => {
 
             {/* ==================== TRIPS TAB ==================== */}
             {tab === 'trips' && (() => {
-              // Build trip entries from both bookings AND scheduled ride instances (from driverSchedules)
+              // Build trip entries from bookings AND next upcoming scheduled trip per schedule
               const validBookings = bookings.filter(b => b.routes != null);
               const grouped: Record<string, { bookings: any[]; routeInfo: any; date: string; time: string }> = {};
               
@@ -1314,30 +1314,39 @@ const DriverDashboard = () => {
                 grouped[key].bookings.push(b);
               });
 
-              // Add scheduled trips that have no bookings yet
+              // Add only the NEXT upcoming occurrence from each schedule (not 4 weeks)
               const now = new Date();
               const todayDow = now.getDay();
+              const todayStr = now.toISOString().split('T')[0];
+              const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+              
               for (const s of driverSchedules) {
-                // Generate upcoming dates for this schedule
-                for (let w = 0; w < 4; w++) {
-                  for (let d = 0; d < 7; d++) {
-                    const date = new Date(now);
-                    date.setDate(now.getDate() + (w * 7) + d);
-                    if (date.getDay() === s.day_of_week) {
-                      const dateStr = date.toISOString().split('T')[0];
-                      if (s.departure_time) {
-                        const key = `${dateStr}__${s.route_id}__${s.departure_time}`;
-                        if (!grouped[key]) grouped[key] = { bookings: [], routeInfo: s.routes, date: dateStr, time: s.departure_time };
-                      }
-                      if (s.return_time) {
-                        const key = `${dateStr}__${s.route_id}__${s.return_time}`;
-                        if (!grouped[key]) grouped[key] = { bookings: [], routeInfo: s.routes, date: dateStr, time: s.return_time };
-                      }
-                    }
-                  }
+                let offset = s.day_of_week - todayDow;
+                if (offset < 0) offset += 7;
+                // If today but time passed, go to next week
+                if (offset === 0 && s.departure_time?.slice(0, 5) < currentTime) offset = 7;
+                const nextDate = new Date(now);
+                nextDate.setDate(now.getDate() + offset);
+                const dateStr = nextDate.toISOString().split('T')[0];
+                
+                if (s.departure_time) {
+                  const key = `${dateStr}__${s.route_id}__${s.departure_time}`;
+                  if (!grouped[key]) grouped[key] = { bookings: [], routeInfo: s.routes, date: dateStr, time: s.departure_time };
+                }
+                if (s.return_time) {
+                  // Check return time separately for today
+                  let retOffset = s.day_of_week - todayDow;
+                  if (retOffset < 0) retOffset += 7;
+                  if (retOffset === 0 && s.return_time?.slice(0, 5) < currentTime) retOffset = 7;
+                  const retDate = new Date(now);
+                  retDate.setDate(now.getDate() + retOffset);
+                  const retDateStr = retDate.toISOString().split('T')[0];
+                  const key = `${retDateStr}__${s.route_id}__${s.return_time}`;
+                  if (!grouped[key]) grouped[key] = { bookings: [], routeInfo: s.routes, date: retDateStr, time: s.return_time };
                 }
               }
 
+              // Sort by date ascending, then time ascending (soonest first)
               const sortedKeys = Object.keys(grouped).sort((a, b) => {
                 const [dateA, , timeA] = a.split('__');
                 const [dateB, , timeB] = b.split('__');
