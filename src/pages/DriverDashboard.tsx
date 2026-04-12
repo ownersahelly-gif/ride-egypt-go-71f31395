@@ -69,6 +69,13 @@ const DriverDashboard = () => {
   const [quickAddDir, setQuickAddDir] = useState<'go' | 'return'>('go');
   const [savingQuickAdd, setSavingQuickAdd] = useState(false);
   const [startingTrip, setStartingTrip] = useState(false);
+  const [nowTick, setNowTick] = useState(Date.now());
+
+  // Update nowTick every 30s so countdown timers refresh
+  useEffect(() => {
+    const iv = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(iv);
+  }, []);
 
   const { newBookingsCount, acknowledge: ackBookings } = useDriverBookingNotifications(shuttle?.id || null);
   
