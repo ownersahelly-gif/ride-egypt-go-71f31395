@@ -945,11 +945,12 @@ const DriverDashboard = () => {
 
                 {/* Prompt if no schedule */}
                 {driverSchedules.length === 0 && (
-                  <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5">
-                    <h3 className="font-semibold text-foreground mb-1">{lang === 'ar' ? 'ابدأ بتحديد مسارك!' : 'Set up your route!'}</h3>
-                    <p className="text-sm text-muted-foreground mb-3">{lang === 'ar' ? 'اختر مسار وحدد أيام عملك لبدء استقبال الركاب' : 'Pick a route and set your work days to start receiving riders'}</p>
-                    <Button onClick={() => setTab('schedule')}>
-                      <Calendar className="w-4 h-4 me-1" />{lang === 'ar' ? 'إعداد الجدول' : 'Set Schedule'}
+                  <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 text-center">
+                    <Route className="w-10 h-10 text-primary mx-auto mb-3" />
+                    <h3 className="font-semibold text-foreground mb-1">{lang === 'ar' ? 'هل تريد تأمين أول مسار لك؟' : 'Want to secure your first route?'}</h3>
+                    <p className="text-sm text-muted-foreground mb-4">{lang === 'ar' ? 'اضغط هنا للذهاب إلى صفحة الجدول واختيار مسارك' : 'Press here to go to the schedule page and choose your route'}</p>
+                    <Button onClick={() => setTab('schedule')} className="h-11">
+                      <Calendar className="w-4 h-4 me-2" />{lang === 'ar' ? 'الذهاب للجدول' : 'Go to Schedule'}
                     </Button>
                   </div>
                 )}
