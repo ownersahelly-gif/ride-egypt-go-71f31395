@@ -42,6 +42,8 @@ const Dashboard = () => {
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [isDriver, setIsDriver] = useState(false);
+  const [isPartner, setIsPartner] = useState(false);
+  const [partnerStatus, setPartnerStatus] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null);
 
   // Booking flow state
@@ -117,13 +119,18 @@ const Dashboard = () => {
 
     if (!user) return;
     const fetchUserData = async () => {
-      const [{ data: profileData }, { data: rolesData }] = await Promise.all([
+      const [{ data: profileData }, { data: rolesData }, { data: partnerData }] = await Promise.all([
         supabase.from('profiles').select('*').eq('user_id', user.id).single(),
         supabase.from('user_roles').select('role').eq('user_id', user.id),
+        supabase.from('partner_companies').select('status').eq('user_id', user.id).maybeSingle(),
       ]);
       setProfile(profileData);
       const roles = (rolesData || []).map(r => r.role);
       setIsAdmin(roles.includes('admin'));
+      if (partnerData) {
+        setIsPartner(true);
+        setPartnerStatus(partnerData.status);
+      }
       const driverFlag = profileData?.user_type === 'driver' || roles.includes('moderator');
       setIsDriver(driverFlag);
       if (driverFlag) { navigate('/driver-dashboard'); return; }
