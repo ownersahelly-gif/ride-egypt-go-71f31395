@@ -415,7 +415,29 @@ const Signup = () => {
               </div>
             </div>
 
-            <Button type="submit" className="w-full gap-2" size="lg" disabled={loading}>
+            {/* Terms acceptance */}
+            <div className="flex items-start gap-3 pt-2">
+              <input
+                type="checkbox"
+                id="acceptTermsRider"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="w-5 h-5 rounded border-border text-primary focus:ring-primary mt-0.5"
+              />
+              <Label htmlFor="acceptTermsRider" className="cursor-pointer text-sm leading-relaxed">
+                {lang === 'ar'
+                  ? <>أوافق على <Link to="/legal?section=terms" target="_blank" className="text-primary underline">الشروط والأحكام</Link> و<Link to="/legal?section=privacy" target="_blank" className="text-primary underline">سياسة الخصوصية</Link></>
+                  : <>I agree to the <Link to="/legal?section=terms" target="_blank" className="text-primary underline">Terms & Conditions</Link> and <Link to="/legal?section=privacy" target="_blank" className="text-primary underline">Privacy Policy</Link></>}
+              </Label>
+            </div>
+
+            {referralCode && (
+              <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+                {lang === 'ar' ? `كود الإحالة: ${referralCode}` : `Referral code: ${referralCode}`}
+              </p>
+            )}
+
+            <Button type="submit" className="w-full gap-2" size="lg" disabled={loading || !acceptedTerms}>
               {loading ? (lang === 'ar' ? 'جاري التسجيل...' : 'Creating account...') : t('auth.signup')}
               <Arrow className="w-4 h-4" />
             </Button>
