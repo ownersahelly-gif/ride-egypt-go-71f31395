@@ -373,6 +373,18 @@ const DriverDashboard = () => {
 
   const quickAddTimeSlot = async () => {
     if (!user || !shuttle || !quickAddDay) return;
+    // Prevent adding past times for today
+    const todayDow = new Date().getDay();
+    if (quickAddDay.day === todayDow) {
+      const now = new Date();
+      const [hh, mm] = quickAddTime.split(':').map(Number);
+      const slotTime = new Date();
+      slotTime.setHours(hh, mm, 0, 0);
+      if (slotTime.getTime() <= now.getTime()) {
+        toast({ title: lang === 'ar' ? 'الوقت قد مضى' : 'Time has already passed', description: lang === 'ar' ? 'اختر وقتاً في المستقبل' : 'Please choose a future time', variant: 'destructive' });
+        return;
+      }
+    }
     setSavingQuickAdd(true);
     const entry = {
       driver_id: user.id, route_id: quickAddDay.routeId, shuttle_id: quickAddDay.shuttleId,
