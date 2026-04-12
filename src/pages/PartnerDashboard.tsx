@@ -19,7 +19,7 @@ const PartnerDashboard = () => {
   const { lang, setLang, appName } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const Back = lang === 'ar' ? ChevronRight : ChevronLeft;
+  
 
   const [loading, setLoading] = useState(true);
   const [partner, setPartner] = useState<any>(null);
