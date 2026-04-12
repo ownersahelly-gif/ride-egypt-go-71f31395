@@ -831,8 +831,8 @@ const BookRide = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface">
-      <header className="bg-card border-b border-border sticky top-0 z-40">
+    <div className="h-[100dvh] bg-surface flex flex-col overflow-hidden">
+      <header className="bg-card border-b border-border sticky top-0 z-40 shrink-0 safe-area-top">
         <div className="container mx-auto flex items-center h-16 px-4 gap-4">
           <Link to="/dashboard">
             <Button variant="ghost" size="icon"><Back className="w-5 h-5" /></Button>
@@ -841,7 +841,8 @@ const BookRide = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6 max-w-2xl">
+      <main className="flex-1 min-h-0 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="container mx-auto px-4 py-6 max-w-2xl safe-area-bottom pb-8">
         {step === 'browse' && (
           <div className="space-y-4">
             <div className="space-y-2">
@@ -1349,6 +1350,7 @@ const BookRide = () => {
             </div>
           </div>
         )}
+        </div>
       </main>
     </div>
   );
