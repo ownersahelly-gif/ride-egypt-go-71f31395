@@ -548,6 +548,45 @@ export type Database = {
           },
         ]
       }
+      package_templates: {
+        Row: {
+          created_at: string
+          factor: number
+          id: string
+          is_active: boolean
+          name_ar: string
+          name_en: string
+          ride_count: number | null
+          sort_order: number
+          updated_at: string
+          validity_days: number
+        }
+        Insert: {
+          created_at?: string
+          factor?: number
+          id?: string
+          is_active?: boolean
+          name_ar: string
+          name_en: string
+          ride_count?: number | null
+          sort_order?: number
+          updated_at?: string
+          validity_days?: number
+        }
+        Update: {
+          created_at?: string
+          factor?: number
+          id?: string
+          is_active?: boolean
+          name_ar?: string
+          name_en?: string
+          ride_count?: number | null
+          sort_order?: number
+          updated_at?: string
+          validity_days?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -761,6 +800,48 @@ export type Database = {
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_package_overrides: {
+        Row: {
+          created_at: string
+          factor_override: number
+          id: string
+          package_template_id: string
+          route_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          factor_override: number
+          id?: string
+          package_template_id: string
+          route_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          factor_override?: number
+          id?: string
+          package_template_id?: string
+          route_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_package_overrides_package_template_id_fkey"
+            columns: ["package_template_id"]
+            isOneToOne: false
+            referencedRelation: "package_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_package_overrides_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
             referencedColumns: ["id"]
           },
         ]
@@ -1054,6 +1135,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "stops_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_based_pricing_rules: {
+        Row: {
+          created_at: string
+          day_of_week: number[] | null
+          end_time: string | null
+          factor: number
+          id: string
+          is_active: boolean
+          name_ar: string
+          name_en: string
+          route_id: string | null
+          start_time: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week?: number[] | null
+          end_time?: string | null
+          factor?: number
+          id?: string
+          is_active?: boolean
+          name_ar?: string
+          name_en?: string
+          route_id?: string | null
+          start_time?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number[] | null
+          end_time?: string | null
+          factor?: number
+          id?: string
+          is_active?: boolean
+          name_ar?: string
+          name_en?: string
+          route_id?: string | null
+          start_time?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_based_pricing_rules_route_id_fkey"
             columns: ["route_id"]
             isOneToOne: false
             referencedRelation: "routes"
