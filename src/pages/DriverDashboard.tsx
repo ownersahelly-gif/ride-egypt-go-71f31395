@@ -623,14 +623,15 @@ const DriverDashboard = () => {
                     });
                   }
 
-                  // Sort: non-past first, then by day offset, then by time
+                  // Sort by day offset, then by time (soonest first)
                   tripSlots.sort((a, b) => {
-                    if (a.isPast !== b.isPast) return a.isPast ? 1 : -1;
                     if (a.dayOffset !== b.dayOffset) return a.dayOffset - b.dayOffset;
                     return a.time.localeCompare(b.time);
                   });
 
-                  const displaySlots = showAllUpcoming ? tripSlots : tripSlots.slice(0, 2);
+                  // HOME TAB: only show upcoming (non-past) trips
+                  const upcomingSlots = tripSlots.filter(s => !s.isPast);
+                  const displaySlots = showAllUpcoming ? upcomingSlots : upcomingSlots.slice(0, 2);
                   const routeIds = [...new Set(driverSchedules.map(s => s.route_id).filter(Boolean))];
                   const firstTodayTrip = tripSlots.find(slot => slot.dayOffset === 0) || null;
 
