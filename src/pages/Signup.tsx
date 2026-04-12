@@ -83,7 +83,7 @@ const StepIndicator = ({ current, total }: { current: number; total: number }) =
 
 const Signup = () => {
   const { signUp } = useAuth();
-  const { t, lang } = useLanguage();
+  const { t, lang, appName } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [role, setRole] = useState<UserRole | null>(null);
@@ -289,7 +289,7 @@ const Signup = () => {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <Link to="/" className="text-3xl font-bold text-primary font-arabic">
-              {lang === 'ar' ? 'مسار' : 'Massar'}
+              {appName}
             </Link>
             <h1 className="text-2xl font-bold text-foreground mt-6">
               {lang === 'ar' ? 'إنشاء حساب' : 'Create Account'}
@@ -329,7 +329,7 @@ const Signup = () => {
                   {lang === 'ar' ? 'سائق - أريد العمل كسائق' : 'Driver - I want to drive'}
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {lang === 'ar' ? 'انضم كسائق واكسب مع مسار' : 'Join as a driver and earn with Massar'}
+                  {lang === 'ar' ? `انضم كسائق واكسب مع ${appName}` : `Join as a driver and earn with ${appName}`}
                 </p>
               </div>
             </button>
@@ -350,7 +350,7 @@ const Signup = () => {
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
             <Link to="/" className="text-3xl font-bold text-primary font-arabic">
-              {lang === 'ar' ? 'مسار' : 'Massar'}
+              {appName}
             </Link>
             <h1 className="text-2xl font-bold text-foreground mt-4">
               {lang === 'ar' ? 'إنشاء حساب راكب' : 'Create Rider Account'}
@@ -421,7 +421,7 @@ const Signup = () => {
       <div className="w-full max-w-md mx-auto pb-8">
         <div className="text-center mb-4">
           <Link to="/" className="text-3xl font-bold text-primary font-arabic">
-            {lang === 'ar' ? 'مسار' : 'Massar'}
+            {appName}
           </Link>
           <h1 className="text-2xl font-bold text-foreground mt-4">
             {lang === 'ar' ? 'تسجيل كسائق' : 'Sign Up as Driver'}

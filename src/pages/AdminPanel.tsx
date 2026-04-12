@@ -20,7 +20,7 @@ type AdminTab = 'routes' | 'drivers' | 'shuttles' | 'bookings' | 'analytics' | '
 
 const AdminPanel = () => {
   const { user, signOut } = useAuth();
-  const { t, lang, setLang } = useLanguage();
+  const { t, lang, setLang, appName } = useLanguage();
   const { toast: legacyToast } = useToast();
 
   const [tab, setTab] = useState<AdminTab>('analytics');
@@ -542,7 +542,7 @@ const AdminPanel = () => {
         <div className="container mx-auto flex items-center justify-between h-16 px-4">
           <div className="flex items-center gap-3">
             <Shield className="w-6 h-6 text-primary" />
-            <Link to="/" className="text-xl font-bold text-primary">{lang === 'ar' ? 'مسار' : 'Massar'}</Link>
+            <Link to="/" className="text-xl font-bold text-primary">{appName}</Link>
             <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">Admin</span>
           </div>
           <div className="flex items-center gap-2">

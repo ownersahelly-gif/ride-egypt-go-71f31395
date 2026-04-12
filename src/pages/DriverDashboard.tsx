@@ -21,7 +21,7 @@ type TabType = 'home' | 'schedule' | 'trips';
 // Driver dashboard component
 const DriverDashboard = () => {
   const { user, signOut } = useAuth();
-  const { t, lang, setLang } = useLanguage();
+  const { t, lang, setLang, appName } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -416,7 +416,7 @@ const DriverDashboard = () => {
     <div className="h-screen bg-surface flex flex-col overflow-hidden">
       <header className="bg-card border-b border-border shrink-0 z-40 safe-area-top">
         <div className="container mx-auto flex items-center justify-between h-16 px-4">
-          <Link to="/" className="text-2xl font-bold text-primary font-arabic">{lang === 'ar' ? 'مسار' : 'Massar'}</Link>
+          <Link to="/" className="text-2xl font-bold text-primary font-arabic">{appName}</Link>
           <div className="flex items-center gap-2">
             <button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} className="p-2 text-muted-foreground hover:text-foreground"><Globe className="w-5 h-5" /></button>
             <Link to="/profile"><Button variant="ghost" size="icon"><User className="w-5 h-5" /></Button></Link>

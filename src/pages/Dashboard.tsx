@@ -37,7 +37,7 @@ const Dashboard = () => {
   useBookingNotifications();
   useRideMessageNotifications();
   const { user, signOut } = useAuth();
-  const { t, lang, setLang } = useLanguage();
+  const { t, lang, setLang, appName } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
   const Back = lang === 'ar' ? ChevronRight : ChevronLeft;
@@ -672,7 +672,7 @@ const Dashboard = () => {
       <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0 z-10 safe-area-top">
         <div className="flex items-center gap-2">
           <Link to="/" className="text-xl font-bold text-primary font-arabic">
-            {lang === 'ar' ? 'مسار' : 'Massar'}
+            {appName}
           </Link>
         </div>
         <div className="flex items-center gap-2">
