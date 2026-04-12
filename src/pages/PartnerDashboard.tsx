@@ -475,7 +475,6 @@ const PartnerDashboard = () => {
       </div>
     </div>
   );
-  );
 };
 
 export default PartnerDashboard;
