@@ -168,6 +168,86 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── Driver application approved → notify driver ──
+    if (notification_type === "driver_approved" && record?.user_id) {
+      const userId = record.user_id;
+
+      const { data: tokens } = await supabase
+        .from("device_tokens")
+        .select("token, platform")
+        .eq("user_id", userId);
+
+      if (!tokens || tokens.length === 0) {
+        return new Response(
+          JSON.stringify({ message: "No device tokens for driver" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      await sendFCM(
+        tokens,
+        { title: "🎉 Welcome aboard!", body: "Your driver application has been approved. You can now start accepting rides!" },
+        { type: "driver_approved" }
+      );
+
+      return new Response(
+        JSON.stringify({ message: "Driver approval notification sent", userId }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── New driver application → notify admins ──
+    if (notification_type === "new_driver_application" && record?.user_id) {
+      const applicantId = record.user_id;
+
+      const { data: applicantProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("user_id", applicantId)
+        .single();
+
+      const applicantName = applicantProfile?.full_name || "A new driver";
+
+      // Get all admin user IDs
+      const { data: adminRoles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin");
+
+      if (!adminRoles || adminRoles.length === 0) {
+        return new Response(
+          JSON.stringify({ message: "No admins found" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const adminIds = adminRoles.map((r: any) => r.user_id);
+
+      // Get all device tokens for all admins
+      const { data: tokens } = await supabase
+        .from("device_tokens")
+        .select("token, platform")
+        .in("user_id", adminIds);
+
+      if (!tokens || tokens.length === 0) {
+        return new Response(
+          JSON.stringify({ message: "No device tokens for admins" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      await sendFCM(
+        tokens,
+        { title: "📋 New Driver Application", body: `${applicantName} has applied to become a driver. Review their application.` },
+        { type: "new_driver_application", user_id: applicantId }
+      );
+
+      return new Response(
+        JSON.stringify({ message: "Admin notification sent", adminCount: adminIds.length }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // ── Ride message notification ──
     if (type === "INSERT" && record?.booking_id && record?.sender_id) {
       const bookingId = record.booking_id;
