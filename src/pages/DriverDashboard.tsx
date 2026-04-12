@@ -429,6 +429,21 @@ const DriverDashboard = () => {
     if (!user || !shuttle) return;
     setStartingTrip(true);
     try {
+      // Update ride_instance status to 'in_progress' so passengers see live tracking
+      await supabase
+        .from('ride_instances')
+        .update({ status: 'in_progress' })
+        .eq('shuttle_id', shuttle.id)
+        .eq('route_id', slot.routeId)
+        .eq('ride_date', slot.dateStr)
+        .eq('departure_time', slot.time);
+
+      // Update shuttle status to active if not already
+      if (shuttle.status !== 'active') {
+        await supabase.from('shuttles').update({ status: 'active' }).eq('id', shuttle.id);
+        setShuttle({ ...shuttle, status: 'active' });
+      }
+
       // Send push notification to all booked riders
       await supabase.functions.invoke('push-notification', {
         body: {
@@ -444,10 +459,44 @@ const DriverDashboard = () => {
         },
       });
     } catch (e) {
-      console.error('Failed to send trip started notification:', e);
+      console.error('Failed to start trip:', e);
     }
     setStartingTrip(false);
     navigate('/active-ride');
+  };
+
+  const handleDeleteTrip = async (key: string) => {
+    // Check if there are paid bookings for this trip
+    const entry = key.split('__');
+    const tripDate = entry[0];
+    const tripRouteId = entry[1];
+    const tripTime = entry[2];
+
+    const { data: paidBookings } = await supabase
+      .from('bookings')
+      .select('id, status, payment_proof_url')
+      .eq('shuttle_id', shuttle?.id)
+      .eq('scheduled_date', tripDate)
+      .eq('scheduled_time', tripTime)
+      .in('status', ['confirmed', 'pending']);
+
+    const hasPaidBookings = (paidBookings || []).some(b => b.payment_proof_url || b.status === 'confirmed');
+
+    if (hasPaidBookings) {
+      setDeleteConfirmKey(key);
+    } else {
+      // No paid bookings, delete directly
+      const matchSchedule = driverSchedules.find(s => s.route_id === tripRouteId);
+      if (matchSchedule) deleteSchedule(matchSchedule.id);
+    }
+  };
+
+  const confirmDeleteTrip = () => {
+    if (!deleteConfirmKey) return;
+    const tripRouteId = deleteConfirmKey.split('__')[1];
+    const matchSchedule = driverSchedules.find(s => s.route_id === tripRouteId);
+    if (matchSchedule) deleteSchedule(matchSchedule.id);
+    setDeleteConfirmKey(null);
   };
 
   const statusColors: Record<string, string> = {
