@@ -139,24 +139,25 @@ const PartnerDashboard = () => {
     setShowRouteForm(true);
   };
 
-  const handleSubmitRoute = async () => {
-    if (!routeForm.name_en || !routeForm.origin_name_en || !routeForm.destination_name_en) {
+  const handleSubmitRoute = async (asDraft = false) => {
+    if (!asDraft && (!routeForm.name_en || !routeForm.origin_name_en || !routeForm.destination_name_en)) {
       toast({ title: lang === 'ar' ? 'يرجى ملء جميع الحقول' : 'Please fill all fields', variant: 'destructive' });
       return;
     }
     setSubmittingRoute(true);
     const payload = {
-      name_en: routeForm.name_en,
-      name_ar: routeForm.name_ar || routeForm.name_en,
-      origin_name: routeForm.origin_name_en,
+      name_en: routeForm.name_en || 'Draft',
+      name_ar: routeForm.name_ar || routeForm.name_en || 'Draft',
+      origin_name: routeForm.origin_name_en || '',
       origin_lat: routeForm.origin_lat,
       origin_lng: routeForm.origin_lng,
-      destination_name: routeForm.destination_name_en,
+      destination_name: routeForm.destination_name_en || '',
       destination_lat: routeForm.destination_lat,
       destination_lng: routeForm.destination_lng,
       price: routeForm.price,
       estimated_duration_minutes: routeForm.estimated_duration_minutes,
       stops_json: routeForm.stops,
+      status: asDraft ? 'draft' : 'pending',
     };
 
     let error;
@@ -167,7 +168,10 @@ const PartnerDashboard = () => {
     }
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
     else {
-      toast({ title: lang === 'ar' ? (editingRouteId ? 'تم تحديث الطلب!' : 'تم إرسال طلب المسار!') : (editingRouteId ? 'Route request updated!' : 'Route request submitted!') });
+      const msg = asDraft
+        ? (lang === 'ar' ? 'تم حفظ المسودة!' : 'Draft saved!')
+        : (editingRouteId ? (lang === 'ar' ? 'تم تحديث الطلب!' : 'Route request updated!') : (lang === 'ar' ? 'تم إرسال طلب المسار!' : 'Route request submitted!'));
+      toast({ title: msg });
       setShowRouteForm(false);
       resetRouteForm();
       fetchData();
