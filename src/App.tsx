@@ -28,6 +28,7 @@ import CarpoolManage from "./pages/CarpoolManage.tsx";
 import Wallet from "./pages/Wallet.tsx";
 import DriverTestView from "./pages/DriverTestView.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import Legal from "./pages/Legal.tsx";
 import GlobalNotifications from "./components/GlobalNotifications";
 
 const queryClient = new QueryClient();
@@ -64,6 +65,7 @@ const App = () => (
               <Route path="/carpool/post" element={<ProtectedRoute><CarpoolPost /></ProtectedRoute>} />
               <Route path="/carpool/route/:id" element={<ProtectedRoute><CarpoolRoute /></ProtectedRoute>} />
               <Route path="/carpool/manage/:id" element={<ProtectedRoute><CarpoolManage /></ProtectedRoute>} />
+              <Route path="/legal" element={<Legal />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

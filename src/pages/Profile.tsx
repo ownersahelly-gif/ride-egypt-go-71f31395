@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { ChevronLeft, ChevronRight, User, Camera, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, Camera, Loader2, Shield, FileText, MapPin, Scale, ChevronRight as ChevronRightIcon } from 'lucide-react';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -131,6 +131,29 @@ const Profile = () => {
             {loading ? t('auth.loading') : t('profile.save')}
           </Button>
         </form>
+
+        {/* Legal & Privacy Section */}
+        <div className="mt-6 bg-card rounded-2xl border border-border overflow-hidden">
+          <h3 className="text-sm font-semibold text-foreground px-6 pt-5 pb-2">
+            {lang === 'ar' ? 'القانوني والخصوصية' : 'Legal & Privacy'}
+          </h3>
+          {[
+            { icon: Shield, label: { en: 'Privacy Policy', ar: 'سياسة الخصوصية' }, section: 'privacy' },
+            { icon: FileText, label: { en: 'Terms of Service', ar: 'شروط الخدمة' }, section: 'terms' },
+            { icon: MapPin, label: { en: 'Location Data Usage', ar: 'استخدام بيانات الموقع' }, section: 'location' },
+            { icon: Scale, label: { en: 'Licenses & Copyright', ar: 'التراخيص وحقوق الطبع' }, section: 'licenses' },
+          ].map((item, i) => (
+            <Link
+              key={item.section}
+              to={`/legal?section=${item.section}`}
+              className={`flex items-center gap-3 px-6 py-3.5 hover:bg-muted/50 transition-colors ${i > 0 ? 'border-t border-border' : ''}`}
+            >
+              <item.icon className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span className="text-sm text-foreground flex-1">{item.label[lang]}</span>
+              <ChevronRightIcon className="w-4 h-4 text-muted-foreground" />
+            </Link>
+          ))}
+        </div>
       </main>
       
       <BottomNav />
