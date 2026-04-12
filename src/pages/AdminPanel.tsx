@@ -80,6 +80,10 @@ const AdminPanel = () => {
   const [platformEarnings, setPlatformEarnings] = useState<any[]>([]);
   const [partnerRouteRequests, setPartnerRouteRequests] = useState<any[]>([]);
   const [partnerProfiles, setPartnerProfiles] = useState<Record<string, any>>({});
+  const [expandedPartnerRoute, setExpandedPartnerRoute] = useState<string | null>(null);
+  const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({});
+  const [showRejectInput, setShowRejectInput] = useState<string | null>(null);
+  const [partnerPackageRequests, setPartnerPackageRequests] = useState<any[]>([]);
 
   // User filters
   const [userTypeFilter, setUserTypeFilter] = useState('all');
