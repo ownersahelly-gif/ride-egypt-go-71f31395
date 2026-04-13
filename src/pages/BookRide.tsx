@@ -178,6 +178,22 @@ const BookRide = () => {
     }
 
     setRideInstances(allResults);
+
+    // Check which rides the user has already booked
+    if (user && allResults.length > 0) {
+      const { data: userBookings } = await supabase
+        .from('bookings')
+        .select('route_id, scheduled_date, scheduled_time')
+        .eq('user_id', user.id)
+        .eq('scheduled_date', date)
+        .not('status', 'eq', 'cancelled');
+      const bookedKeys = new Set<string>();
+      (userBookings || []).forEach(b => {
+        bookedKeys.add(`${b.route_id}_${b.scheduled_date}_${b.scheduled_time}`);
+      });
+      setUserBookedRides(bookedKeys);
+    }
+
     setLoadingRides(false);
   };
 
