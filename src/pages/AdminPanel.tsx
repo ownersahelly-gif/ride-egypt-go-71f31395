@@ -236,10 +236,36 @@ const AdminPanel = () => {
       setPartnerProfiles(ppMap);
     }
 
+    // Fetch published trips
+    const { data: pubTrips } = await supabase.from('published_trips').select('*').order('trip_date', { ascending: false }).limit(100);
+    setPublishedTrips(pubTrips || []);
+
     setLoading(false);
   };
 
-  const saveInstapayPhone = async () => {
+  const handlePublishTrip = async () => {
+    if (!publishRouteId) return;
+    setPublishingTrip(true);
+    const { error } = await supabase.from('published_trips').insert({
+      route_id: publishRouteId,
+      departure_time: publishTime,
+      trip_date: publishDate,
+      status: 'active',
+    });
+    if (error) toast.error(error.message);
+    else {
+      toast.success(lang === 'ar' ? 'تم نشر الرحلة' : 'Trip published');
+      setPublishRouteId(null);
+      fetchAllData();
+    }
+    setPublishingTrip(false);
+  };
+
+  const handleUnpublishTrip = async (tripId: string) => {
+    await supabase.from('published_trips').update({ status: 'closed' }).eq('id', tripId);
+    toast.success(lang === 'ar' ? 'تم إلغاء النشر' : 'Trip unpublished');
+    fetchAllData();
+  };
     setSavingPhone(true);
     const { error } = await supabase.from('app_settings').upsert(
       { key: 'instapay_phone', value: instapayPhone },
