@@ -90,6 +90,8 @@ const AdminPanel = () => {
   const [partnerPackageRequests, setPartnerPackageRequests] = useState<any[]>([]);
   const [expandedGroupIndex, setExpandedGroupIndex] = useState<number | null>(null);
   const [creatingRouteFromGroup, setCreatingRouteFromGroup] = useState<number | null>(null);
+  const [editedGroupStops, setEditedGroupStops] = useState<Record<number, GeneratedRoute | null>>({});
+  const [draggingStopIdx, setDraggingStopIdx] = useState<number | null>(null);
 
   // Published trips
   const [publishedTrips, setPublishedTrips] = useState<any[]>([]);
@@ -2329,9 +2331,41 @@ const AdminPanel = () => {
             ? ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
             : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+          const getEditedRoute = (gi: number): GeneratedRoute => {
+            if (editedGroupStops[gi]) return editedGroupStops[gi]!;
+            return generateSmartRoute(groups[gi]);
+          };
+
+          const updateStopInGroup = (gi: number, stopIdx: number, lat: number, lng: number, name?: string) => {
+            const route = { ...getEditedRoute(gi) };
+            const stops = [...route.stops];
+            stops[stopIdx] = { ...stops[stopIdx], lat, lng, name: name || stops[stopIdx].name };
+            setEditedGroupStops(prev => ({ ...prev, [gi]: { ...route, stops } }));
+          };
+
+          const removeStopFromGroup = (gi: number, stopIdx: number) => {
+            const route = { ...getEditedRoute(gi) };
+            const stops = route.stops.filter((_, i) => i !== stopIdx);
+            setEditedGroupStops(prev => ({ ...prev, [gi]: { ...route, stops } }));
+          };
+
+          const addStopToGroup = (gi: number, lat: number, lng: number) => {
+            const route = { ...getEditedRoute(gi) };
+            const stops = [...route.stops, { lat, lng, name: `Stop ${route.stops.length + 1}`, userCount: 0, userIds: [] }];
+            setEditedGroupStops(prev => ({ ...prev, [gi]: { ...route, stops } }));
+          };
+
+          const reorderStopInGroup = (gi: number, fromIdx: number, toIdx: number) => {
+            const route = { ...getEditedRoute(gi) };
+            const stops = [...route.stops];
+            const [moved] = stops.splice(fromIdx, 1);
+            stops.splice(toIdx, 0, moved);
+            setEditedGroupStops(prev => ({ ...prev, [gi]: { ...route, stops } }));
+          };
+
           const handleCreateOfficialRoute = async (gi: number) => {
             const group = groups[gi];
-            const generated = generateSmartRoute(group);
+            const generated = getEditedRoute(gi);
             setCreatingRouteFromGroup(gi);
             try {
               const routeName = `${generated.origin.name} → ${generated.destination.name}`;
@@ -2382,8 +2416,8 @@ const AdminPanel = () => {
             ) : (
               <div className="space-y-3">
                 {groups.map((group, gi) => {
-                  const isExpanded = expandedGroupIndex === gi;
-                  const generated = generateSmartRoute(group);
+                   const isExpanded = expandedGroupIndex === gi;
+                   const generated = getEditedRoute(gi);
                   return (
                   <div key={gi} className="bg-card border border-border rounded-xl overflow-hidden">
                     <button className="w-full p-4 flex items-center justify-between hover:bg-muted/30 transition-colors text-start" onClick={() => setExpandedGroupIndex(isExpanded ? null : gi)}>
@@ -2404,31 +2438,98 @@ const AdminPanel = () => {
                     </button>
                     {isExpanded && (
                       <div className="border-t border-border">
+                        {/* Map with real directions, user locations, and stops */}
+                        <div className="h-[400px] relative">
+                          <MapView
+                            origin={generated.origin}
+                            destination={generated.destination}
+                            waypoints={generated.stops.map(s => ({ lat: s.lat, lng: s.lng }))}
+                            showDirections={true}
+                            markers={[
+                              // Origin (green)
+                              { lat: generated.origin.lat, lng: generated.origin.lng, label: 'A', color: 'green' },
+                              // Destination (red)
+                              { lat: generated.destination.lat, lng: generated.destination.lng, label: 'B', color: 'red' },
+                              // Generated stops (blue, numbered)
+                              ...generated.stops.map((s, i) => ({ lat: s.lat, lng: s.lng, label: `${i + 1}`, color: 'blue' as const })),
+                              // User pickup locations (orange)
+                              ...group.requests.map((rr: any) => ({ lat: rr.origin_lat, lng: rr.origin_lng, label: (routeRequestProfiles[rr.user_id]?.full_name || '?')[0], color: 'orange' as const })),
+                              // User dropoff locations (purple)
+                              ...group.requests.map((rr: any) => ({ lat: rr.destination_lat, lng: rr.destination_lng, label: '🏁', color: 'purple' as const })),
+                            ]}
+                            showUserLocation={false}
+                            zoom={10}
+                            onMapClick={(lat, lng) => addStopToGroup(gi, lat, lng)}
+                            className="h-full w-full rounded-none"
+                          />
+                          <div className="absolute top-2 start-2 bg-card/90 backdrop-blur rounded-lg p-2 text-xs space-y-1 border border-border shadow-md z-[5]">
+                            <p className="font-medium text-foreground">{lang === 'ar' ? 'دليل الألوان' : 'Legend'}</p>
+                            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />{lang === 'ar' ? 'نقطة البداية' : 'Origin'}</div>
+                            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-destructive inline-block" />{lang === 'ar' ? 'الوجهة' : 'Destination'}</div>
+                            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-primary inline-block" />{lang === 'ar' ? 'محطات مقترحة' : 'Generated Stops'}</div>
+                            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#F97316'}} />{lang === 'ar' ? 'نقاط ركوب المستخدمين' : 'User Pickups'}</div>
+                            <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: '#8B5CF6'}} />{lang === 'ar' ? 'نقاط نزول المستخدمين' : 'User Dropoffs'}</div>
+                            <p className="text-muted-foreground pt-1">{lang === 'ar' ? 'اضغط على الخريطة لإضافة محطة' : 'Click map to add a stop'}</p>
+                          </div>
+                        </div>
+
+                        {/* Editable stops list */}
                         <div className="p-4 bg-primary/5 space-y-3">
                           <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                            <Route className="w-4 h-4 text-primary" />{lang === 'ar' ? 'المسار المقترح تلقائياً' : 'Auto-Generated Route'}
-                            {generated.corridor && <span className="text-xs text-muted-foreground font-normal">({lang === 'ar' ? 'ممر' : 'Corridor'}: {generated.corridor.name})</span>}
+                            <Route className="w-4 h-4 text-primary" />{lang === 'ar' ? 'المحطات (قابلة للتعديل)' : 'Stops (Editable)'}
+                            {generated.corridor && <span className="text-xs text-muted-foreground font-normal">🛣️ {generated.corridor.name}</span>}
+                            {editedGroupStops[gi] && <span className="text-xs text-accent-foreground bg-accent px-2 py-0.5 rounded-full">{lang === 'ar' ? 'معدّل' : 'Modified'}</span>}
                           </h4>
-                          <div className="flex items-start gap-3">
-                            <div className="flex flex-col items-center gap-0 mt-1">
-                              <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-background" />
-                              {generated.stops.map((_, i) => (
-                                <Fragment key={i}><div className="w-0.5 h-5 bg-border" /><div className="w-2.5 h-2.5 rounded-full bg-primary/60" /></Fragment>
-                              ))}
-                              <div className="w-0.5 h-5 bg-border" />
-                              <div className="w-3 h-3 rounded-full bg-destructive border-2 border-background" />
+
+                          <div className="space-y-1.5">
+                            {/* Origin */}
+                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
+                              <span className="w-3 h-3 rounded-full bg-green-500 shrink-0" />
+                              <span className="text-sm font-medium text-foreground flex-1">{generated.origin.name}</span>
+                              <span className="text-xs text-muted-foreground">{lang === 'ar' ? 'بداية' : 'Start'}</span>
                             </div>
-                            <div className="flex-1 space-y-3">
-                              <p className="text-sm font-medium text-foreground">🟢 {generated.origin.name}</p>
-                              {generated.stops.map((s, i) => (
-                                <div key={i} className="text-xs text-muted-foreground">
-                                  <span className="font-medium text-foreground">{s.name}</span>
-                                  <span className="ms-2 text-primary">({s.userCount} {lang === 'ar' ? 'راكب' : s.userCount === 1 ? 'rider' : 'riders'})</span>
+
+                            {/* Stops - draggable */}
+                            {generated.stops.map((s, i) => (
+                              <div
+                                key={i}
+                                draggable
+                                onDragStart={() => setDraggingStopIdx(i)}
+                                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(i); }}
+                                onDrop={() => { if (draggingStopIdx !== null && draggingStopIdx !== i) reorderStopInGroup(gi, draggingStopIdx, i); setDraggingStopIdx(null); setDragOverIndex(null); }}
+                                onDragEnd={() => { setDraggingStopIdx(null); setDragOverIndex(null); }}
+                                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border cursor-grab active:cursor-grabbing transition-colors ${dragOverIndex === i ? 'bg-primary/10 border-primary' : 'bg-card border-border'}`}
+                              >
+                                <ListOrdered className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</span>
+                                <div className="flex-1 min-w-0">
+                                  <Input
+                                    value={s.name}
+                                    onChange={(e) => updateStopInGroup(gi, i, s.lat, s.lng, e.target.value)}
+                                    className="h-6 text-xs border-0 bg-transparent p-0 focus-visible:ring-0"
+                                  />
                                 </div>
-                              ))}
-                              <p className="text-sm font-medium text-foreground">🔴 {generated.destination.name}</p>
+                                {s.userCount > 0 && <span className="text-xs text-primary shrink-0">{s.userCount} 👤</span>}
+                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeStopFromGroup(gi, i)}>
+                                  <Trash2 className="w-3 h-3 text-destructive" />
+                                </Button>
+                              </div>
+                            ))}
+
+                            {/* Destination */}
+                            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-destructive/10 border border-destructive/20">
+                              <span className="w-3 h-3 rounded-full bg-destructive shrink-0" />
+                              <span className="text-sm font-medium text-foreground flex-1">{generated.destination.name}</span>
+                              <span className="text-xs text-muted-foreground">{lang === 'ar' ? 'نهاية' : 'End'}</span>
                             </div>
                           </div>
+
+                          {editedGroupStops[gi] && (
+                            <Button size="sm" variant="outline" onClick={() => setEditedGroupStops(prev => { const n = { ...prev }; delete n[gi]; return n; })}>
+                              <RotateCcw className="w-3.5 h-3.5 me-1" />{lang === 'ar' ? 'إعادة تعيين' : 'Reset to Auto'}
+                            </Button>
+                          )}
+
                           <div className="flex gap-2 pt-1 flex-wrap">
                             <Button size="sm" onClick={() => handleCreateOfficialRoute(gi)} disabled={creatingRouteFromGroup === gi}>
                               {creatingRouteFromGroup === gi ? <Loader2 className="w-3.5 h-3.5 animate-spin me-1" /> : <CheckCircle2 className="w-3.5 h-3.5 me-1" />}
@@ -2438,16 +2539,18 @@ const AdminPanel = () => {
                               const points = [`${generated.origin.lat},${generated.origin.lng}`, ...generated.stops.map(s => `${s.lat},${s.lng}`), `${generated.destination.lat},${generated.destination.lng}`];
                               window.open(`https://www.google.com/maps/dir/${points.join('/')}`, '_blank');
                             }}>
-                              <ExternalLink className="w-3.5 h-3.5 me-1" />{lang === 'ar' ? 'عرض الخريطة' : 'View on Map'}
+                              <ExternalLink className="w-3.5 h-3.5 me-1" />{lang === 'ar' ? 'Google Maps' : 'Google Maps'}
                             </Button>
                           </div>
                         </div>
+
+                        {/* Users list */}
                         <div className="divide-y divide-border">
                           {group.requests.map((rr: any) => {
                             const prof = routeRequestProfiles[rr.user_id];
                             const userRequests = allByUser[rr.user_id] || [];
-                            // Find which stop this user was assigned to
                             const assignedStop = generated.stops.find(s => s.userIds.includes(rr.user_id));
+                            const walkDist = assignedStop ? haversine(rr.origin_lat, rr.origin_lng, assignedStop.lat, assignedStop.lng) : null;
                             return (
                               <details key={rr.id} className="group/person">
                                 <summary className="p-3 flex items-center justify-between cursor-pointer hover:bg-muted/50 transition-colors list-none">
@@ -2457,12 +2560,14 @@ const AdminPanel = () => {
                                       <p className="text-sm font-medium text-foreground">{prof?.full_name || rr.user_id.slice(0, 8)}</p>
                                       <p className="text-xs text-muted-foreground">
                                         {prof?.phone || ''}
-                                        {assignedStop && <span className="ms-2 text-primary">→ {lang === 'ar' ? 'محطة' : 'Stop'}: {assignedStop.name}</span>}
+                                        {assignedStop && <span className="ms-2 text-primary">→ {assignedStop.name}</span>}
+                                        {walkDist !== null && <span className="ms-1 text-muted-foreground">({walkDist < 1 ? `${Math.round(walkDist * 1000)}m` : `${walkDist.toFixed(1)}km`} {lang === 'ar' ? 'مشي' : 'walk'})</span>}
                                       </p>
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    {userRequests.length > 1 && <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{userRequests.length} {lang === 'ar' ? 'طلبات' : 'requests'}</span>}
+                                    {walkDist !== null && walkDist > 2 && <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded-full">⚠️ {lang === 'ar' ? 'بعيد' : 'Far'}</span>}
+                                    {userRequests.length > 1 && <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{userRequests.length} {lang === 'ar' ? 'طلبات' : 'req'}</span>}
                                     <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[rr.status] || 'bg-muted text-muted-foreground'}`}>{rr.status}</span>
                                     <ChevronDown className="w-4 h-4 text-muted-foreground group-open/person:rotate-180 transition-transform" />
                                   </div>
