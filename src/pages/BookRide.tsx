@@ -166,13 +166,27 @@ const BookRide = () => {
         (ptStops || []).forEach(s => { if (!stopsMap[s.route_id]) stopsMap[s.route_id] = []; stopsMap[s.route_id].push(s); });
         setAllRouteStops(prev => ({ ...prev, ...stopsMap }));
       }
+
+      // Count existing bookings per published trip to calculate available seats
+      const ptBookingCounts: Record<string, number> = {};
+      for (const pt of ptData) {
+        const { count } = await supabase
+          .from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('route_id', pt.route_id)
+          .eq('scheduled_date', pt.trip_date)
+          .eq('scheduled_time', pt.departure_time)
+          .not('status', 'eq', 'cancelled');
+        ptBookingCounts[pt.id] = count || 0;
+      }
+
       allResults.push(...ptData.map(pt => ({
         ...pt,
         _type: 'published',
         ride_date: pt.trip_date,
         route_id: pt.route_id,
         direction: 'go',
-        available_seats: 14,
+        available_seats: 14 - (ptBookingCounts[pt.id] || 0),
         total_seats: 14,
       })));
     }
