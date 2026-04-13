@@ -758,6 +758,25 @@ const MyBookings = () => {
           mapMarkers.push({ lat: editSelectedDropoffStop.lat, lng: editSelectedDropoffStop.lng, label: '✓', color: 'red' });
         }
 
+        // Build connection lines from origin → stops → destination
+        const connectionLines: { from: { lat: number; lng: number }; to: { lat: number; lng: number }; color?: string }[] = [];
+        if (route) {
+          const sortedStops = [...editStops].sort((a: any, b: any) => a.stop_order - b.stop_order);
+          const points = [
+            { lat: route.origin_lat, lng: route.origin_lng },
+            ...sortedStops.map((s: any) => ({ lat: s.lat, lng: s.lng })),
+            { lat: route.destination_lat, lng: route.destination_lng },
+          ];
+          for (let i = 0; i < points.length - 1; i++) {
+            connectionLines.push({ from: points[i], to: points[i + 1], color: '#3B82F6' });
+          }
+        }
+
+        const zoomToPoint = (lat: number, lng: number) => {
+          setEditMapCenter({ lat, lng });
+          setEditMapZoom(16);
+        };
+
         const handleSave = async () => {
           setSavingLocation(true);
           const updates: any = {};
