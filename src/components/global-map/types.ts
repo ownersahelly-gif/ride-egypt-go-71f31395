@@ -23,6 +23,24 @@ export interface AreaPreset {
   radius: number;
 }
 
+export interface CircleZone {
+  id: string;
+  pairId: string;
+  pairName: string;
+  type: 'pickup' | 'dropoff';
+  lat: number;
+  lng: number;
+  radius: number;
+}
+
+export const ZONE_COLORS = [
+  { pickup: '#22c55e', dropoff: '#ef4444', label: 'Green/Red' },
+  { pickup: '#3b82f6', dropoff: '#f97316', label: 'Blue/Orange' },
+  { pickup: '#8b5cf6', dropoff: '#ec4899', label: 'Purple/Pink' },
+  { pickup: '#06b6d4', dropoff: '#eab308', label: 'Cyan/Yellow' },
+  { pickup: '#14b8a6', dropoff: '#f43f5e', label: 'Teal/Rose' },
+];
+
 export interface RouteStop {
   id: string;
   lat: number;
@@ -38,11 +56,6 @@ export interface FilterState {
   timeFrom: string;
   timeTo: string;
   days: number[];
-  areaPreset: string;
-  areaRadius: number;
-  areaFilterMode: AreaFilterMode;
-  pickupArea: google.maps.Circle | null;
-  dropoffArea: google.maps.Circle | null;
 }
 
 export const AREA_PRESETS: AreaPreset[] = [
