@@ -8,7 +8,7 @@ const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const containerStyle = { width: '100%', height: '100%' };
 const cairoCenter = { lat: 30.0444, lng: 31.2357 };
-const libraries: ('places')[] = ['places'];
+const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
 
 interface MapViewProps {
   markers?: { lat: number; lng: number; label?: string; color?: 'red' | 'green' | 'blue' | 'orange' | 'purple' }[];
