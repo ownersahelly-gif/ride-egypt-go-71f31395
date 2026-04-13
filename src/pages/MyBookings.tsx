@@ -6,9 +6,9 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { formatTime12h } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { MapPin, Clock, Ticket, ChevronLeft, ChevronRight, MessageCircle, Navigation, Key, Star, Phone, Users, Timer, AlertCircle, Receipt, X, RotateCcw, Ban, Edit3 } from 'lucide-react';
+import { MapPin, Clock, Ticket, ChevronLeft, ChevronRight, MessageCircle, Navigation, Key, Star, Phone, Users, Timer, AlertCircle, Receipt, X, RotateCcw, Ban, Edit3, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import MapPinPicker from '@/components/MapPinPicker';
+import MapView from '@/components/MapView';
 import RideChat from '@/components/RideChat';
 import RideRating from '@/components/RideRating';
 
