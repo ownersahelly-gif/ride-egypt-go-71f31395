@@ -2316,80 +2316,22 @@ const AdminPanel = () => {
 
         {/* Route Requests Tab */}
         {tab === 'route_requests' && (() => {
-          const latestByUser: Record<string, any> = {};
           const allByUser: Record<string, any[]> = {};
           routeRequests.forEach((rr: any) => {
             if (!allByUser[rr.user_id]) allByUser[rr.user_id] = [];
             allByUser[rr.user_id].push(rr);
-            if (!latestByUser[rr.user_id] || new Date(rr.created_at) > new Date(latestByUser[rr.user_id].created_at)) {
-              latestByUser[rr.user_id] = rr;
-            }
           });
-          const uniqueRequests = Object.values(latestByUser);
-          const toRad = (d: number) => d * Math.PI / 180;
-          const haversine = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-            const R = 6371;
-            const dLat = toRad(lat2 - lat1); const dLng = toRad(lng2 - lng1);
-            const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-          };
-          const THRESHOLD_KM = 5;
-          const groups: { requests: any[]; originLabel: string; destLabel: string }[] = [];
-          const assigned = new Set<string>();
-          uniqueRequests.forEach(rr => {
-            if (assigned.has(rr.user_id)) return;
-            const group = [rr];
-            assigned.add(rr.user_id);
-            uniqueRequests.forEach(other => {
-              if (assigned.has(other.user_id)) return;
-              if (haversine(rr.origin_lat, rr.origin_lng, other.origin_lat, other.origin_lng) < THRESHOLD_KM &&
-                  haversine(rr.destination_lat, rr.destination_lng, other.destination_lat, other.destination_lng) < THRESHOLD_KM) {
-                group.push(other);
-                assigned.add(other.user_id);
-              }
-            });
-            groups.push({ requests: group, originLabel: rr.origin_name, destLabel: rr.destination_name });
-          });
-          groups.sort((a, b) => b.requests.length - a.requests.length);
-          const uniqueUserCount = Object.keys(latestByUser).length;
+
+          const groups = smartGroupRequests(routeRequests as RouteRequest[]);
+          const uniqueUserCount = new Set(routeRequests.map((rr: any) => rr.user_id)).size;
+
           const dayLabels = lang === 'ar'
             ? ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
             : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          const generateRouteFromGroup = (group: { requests: any[]; originLabel: string; destLabel: string }) => {
-            const reqs = group.requests;
-            const allPoints: { lat: number; lng: number; name: string; type: 'origin' | 'dest' }[] = [];
-            reqs.forEach(rr => {
-              allPoints.push({ lat: rr.origin_lat, lng: rr.origin_lng, name: rr.origin_name, type: 'origin' });
-              allPoints.push({ lat: rr.destination_lat, lng: rr.destination_lng, name: rr.destination_name, type: 'dest' });
-            });
-            const dedupedPoints: typeof allPoints = [];
-            allPoints.forEach(p => {
-              const exists = dedupedPoints.find(dp => haversine(dp.lat, dp.lng, p.lat, p.lng) < 0.5);
-              if (!exists) dedupedPoints.push(p);
-            });
-            const origins = dedupedPoints.filter(p => p.type === 'origin');
-            const dests = dedupedPoints.filter(p => p.type === 'dest');
-            const avgLat = (pts: typeof allPoints) => pts.reduce((s, p) => s + p.lat, 0) / pts.length;
-            const avgLng = (pts: typeof allPoints) => pts.reduce((s, p) => s + p.lng, 0) / pts.length;
-            const routeOrigin = origins.length > 0
-              ? origins.reduce((closest, p) => haversine(p.lat, p.lng, avgLat(origins), avgLng(origins)) < haversine(closest.lat, closest.lng, avgLat(origins), avgLng(origins)) ? p : closest)
-              : dedupedPoints[0];
-            const routeDest = dests.length > 0
-              ? dests.reduce((closest, p) => haversine(p.lat, p.lng, avgLat(dests), avgLng(dests)) < haversine(closest.lat, closest.lng, avgLat(dests), avgLng(dests)) ? p : closest)
-              : dedupedPoints[dedupedPoints.length - 1];
-            const intermediatePoints = dedupedPoints.filter(p =>
-              !(p.lat === routeOrigin.lat && p.lng === routeOrigin.lng) &&
-              !(p.lat === routeDest.lat && p.lng === routeDest.lng)
-            );
-            intermediatePoints.sort((a, b) =>
-              haversine(routeOrigin.lat, routeOrigin.lng, a.lat, a.lng) -
-              haversine(routeOrigin.lat, routeOrigin.lng, b.lat, b.lng)
-            );
-            return { origin: routeOrigin, destination: routeDest, stops: intermediatePoints, totalDistance: haversine(routeOrigin.lat, routeOrigin.lng, routeDest.lat, routeDest.lng) };
-          };
+
           const handleCreateOfficialRoute = async (gi: number) => {
             const group = groups[gi];
-            const generated = generateRouteFromGroup(group);
+            const generated = generateSmartRoute(group);
             setCreatingRouteFromGroup(gi);
             try {
               const routeName = `${generated.origin.name} → ${generated.destination.name}`;
@@ -2399,7 +2341,7 @@ const AdminPanel = () => {
                 origin_lat: generated.origin.lat, origin_lng: generated.origin.lng,
                 destination_name_en: generated.destination.name, destination_name_ar: generated.destination.name,
                 destination_lat: generated.destination.lat, destination_lng: generated.destination.lng,
-                estimated_duration_minutes: Math.max(30, Math.round(generated.totalDistance * 2)),
+                estimated_duration_minutes: Math.max(30, Math.round(generated.totalDistance * 1.2)),
                 price: 0, status: 'active',
               }).select().single();
               if (error || !newRoute) { toast.error(error?.message || 'Failed'); setCreatingRouteFromGroup(null); return; }
@@ -2419,19 +2361,29 @@ const AdminPanel = () => {
             } catch (err: any) { toast.error(err.message); }
             setCreatingRouteFromGroup(null);
           };
+
           return (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-foreground">{lang === 'ar' ? 'طلبات المسارات (مجمّعة)' : 'Route Requests (Smart Groups)'}</h2>
+            <h2 className="text-xl font-bold text-foreground">{lang === 'ar' ? 'طلبات المسارات (تجميع ذكي)' : 'Route Requests (Smart Shuttle Groups)'}</h2>
             <p className="text-sm text-muted-foreground">
               {lang === 'ar' ? `${uniqueUserCount} مستخدم فريد · ${groups.length} مجموعة · ${routeRequests.length} طلب إجمالي` : `${uniqueUserCount} unique users · ${groups.length} groups · ${routeRequests.length} total requests`}
             </p>
+            <div className="bg-muted/50 border border-border rounded-lg p-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">{lang === 'ar' ? '🚌 منطق التجميع الذكي' : '🚌 Smart Shuttle Logic'}</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>{lang === 'ar' ? 'التجميع حسب الوجهة أولاً (المستخدمون المتجهون لنفس المنطقة)' : 'Groups by destination first (users heading to same area)'}</li>
+                <li>{lang === 'ar' ? 'المحطات على الطرق الرئيسية فقط (الدائري، 26 يوليو، إلخ)' : 'Stops on main roads only (Ring Road, 26 July, etc.)'}</li>
+                <li>{lang === 'ar' ? 'لا التفافات - يتبع ممرات حقيقية في القاهرة' : 'No detours — follows real Cairo corridors'}</li>
+                <li>{lang === 'ar' ? 'يمشي المستخدمون مسافة قصيرة إلى أقرب محطة رئيسية' : 'Users walk short distance to nearest main road stop'}</li>
+              </ul>
+            </div>
             {groups.length === 0 ? (
               <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">{lang === 'ar' ? 'لا توجد طلبات مسارات بعد' : 'No route requests yet'}</div>
             ) : (
               <div className="space-y-3">
                 {groups.map((group, gi) => {
                   const isExpanded = expandedGroupIndex === gi;
-                  const generated = generateRouteFromGroup(group);
+                  const generated = generateSmartRoute(group);
                   return (
                   <div key={gi} className="bg-card border border-border rounded-xl overflow-hidden">
                     <button className="w-full p-4 flex items-center justify-between hover:bg-muted/30 transition-colors text-start" onClick={() => setExpandedGroupIndex(isExpanded ? null : gi)}>
@@ -2439,7 +2391,10 @@ const AdminPanel = () => {
                         <div className="bg-primary text-primary-foreground rounded-full w-9 h-9 flex items-center justify-center text-sm font-bold shrink-0">{group.requests.length}</div>
                         <div>
                           <p className="font-semibold text-foreground text-sm">{group.originLabel} → {group.destLabel}</p>
-                          <p className="text-xs text-muted-foreground">{group.requests.length} {lang === 'ar' ? 'أشخاص' : 'people'} · {generated.stops.length} {lang === 'ar' ? 'محطات' : 'stops'} · ~{generated.totalDistance.toFixed(1)} km</p>
+                          <p className="text-xs text-muted-foreground">
+                            {group.requests.length} {lang === 'ar' ? 'أشخاص' : 'people'} · {generated.stops.length} {lang === 'ar' ? 'محطات' : 'stops'} · ~{generated.totalDistance.toFixed(1)} km
+                            {generated.corridor && <span className="text-primary ms-1">· 🛣️ {generated.corridor.name}</span>}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -2452,6 +2407,7 @@ const AdminPanel = () => {
                         <div className="p-4 bg-primary/5 space-y-3">
                           <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                             <Route className="w-4 h-4 text-primary" />{lang === 'ar' ? 'المسار المقترح تلقائياً' : 'Auto-Generated Route'}
+                            {generated.corridor && <span className="text-xs text-muted-foreground font-normal">({lang === 'ar' ? 'ممر' : 'Corridor'}: {generated.corridor.name})</span>}
                           </h4>
                           <div className="flex items-start gap-3">
                             <div className="flex flex-col items-center gap-0 mt-1">
@@ -2463,12 +2419,17 @@ const AdminPanel = () => {
                               <div className="w-3 h-3 rounded-full bg-destructive border-2 border-background" />
                             </div>
                             <div className="flex-1 space-y-3">
-                              <p className="text-sm font-medium text-foreground">{generated.origin.name}</p>
-                              {generated.stops.map((s, i) => <p key={i} className="text-xs text-muted-foreground">{s.name}</p>)}
-                              <p className="text-sm font-medium text-foreground">{generated.destination.name}</p>
+                              <p className="text-sm font-medium text-foreground">🟢 {generated.origin.name}</p>
+                              {generated.stops.map((s, i) => (
+                                <div key={i} className="text-xs text-muted-foreground">
+                                  <span className="font-medium text-foreground">{s.name}</span>
+                                  <span className="ms-2 text-primary">({s.userCount} {lang === 'ar' ? 'راكب' : s.userCount === 1 ? 'rider' : 'riders'})</span>
+                                </div>
+                              ))}
+                              <p className="text-sm font-medium text-foreground">🔴 {generated.destination.name}</p>
                             </div>
                           </div>
-                          <div className="flex gap-2 pt-1">
+                          <div className="flex gap-2 pt-1 flex-wrap">
                             <Button size="sm" onClick={() => handleCreateOfficialRoute(gi)} disabled={creatingRouteFromGroup === gi}>
                               {creatingRouteFromGroup === gi ? <Loader2 className="w-3.5 h-3.5 animate-spin me-1" /> : <CheckCircle2 className="w-3.5 h-3.5 me-1" />}
                               {lang === 'ar' ? 'اعتماد كمسار رسمي' : 'Approve as Official Route'}
@@ -2485,6 +2446,8 @@ const AdminPanel = () => {
                           {group.requests.map((rr: any) => {
                             const prof = routeRequestProfiles[rr.user_id];
                             const userRequests = allByUser[rr.user_id] || [];
+                            // Find which stop this user was assigned to
+                            const assignedStop = generated.stops.find(s => s.userIds.includes(rr.user_id));
                             return (
                               <details key={rr.id} className="group/person">
                                 <summary className="p-3 flex items-center justify-between cursor-pointer hover:bg-muted/50 transition-colors list-none">
@@ -2492,7 +2455,10 @@ const AdminPanel = () => {
                                     <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-foreground">{(prof?.full_name || '?')[0]}</div>
                                     <div>
                                       <p className="text-sm font-medium text-foreground">{prof?.full_name || rr.user_id.slice(0, 8)}</p>
-                                      <p className="text-xs text-muted-foreground">{prof?.phone || ''}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {prof?.phone || ''}
+                                        {assignedStop && <span className="ms-2 text-primary">→ {lang === 'ar' ? 'محطة' : 'Stop'}: {assignedStop.name}</span>}
+                                      </p>
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">
