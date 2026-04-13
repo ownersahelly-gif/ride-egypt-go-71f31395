@@ -2,9 +2,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { ChevronLeft, Eye, EyeOff, Route, Layers, Filter, X } from 'lucide-react';
+import { ChevronLeft, Route, Layers, Filter, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { AREA_PRESETS, type FilterState } from './types';
+import { AREA_PRESETS, type FilterState, type AreaFilterMode } from './types';
 
 interface MapToolbarProps {
   filters: FilterState;
@@ -20,9 +20,15 @@ interface MapToolbarProps {
   totalCount: number;
   showFilters: boolean;
   onToggleFilters: () => void;
+  loadingRoutes: boolean;
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const AREA_MODE_LABELS: { value: AreaFilterMode; label: string }[] = [
+  { value: 'both', label: 'Both' },
+  { value: 'pickup', label: 'Pickup only' },
+  { value: 'dropoff', label: 'Dropoff only' },
+];
 
 const MapToolbar = ({
   filters, onFiltersChange,
@@ -31,6 +37,7 @@ const MapToolbar = ({
   onGenerateRoute, routeMode, onToggleRouteMode,
   visibleCount, totalCount,
   showFilters, onToggleFilters,
+  loadingRoutes,
 }: MapToolbarProps) => {
   const toggleDay = (d: number) => {
     const days = filters.days.includes(d) ? filters.days.filter(x => x !== d) : [...filters.days, d];
@@ -38,7 +45,7 @@ const MapToolbar = ({
   };
 
   const clearFilters = () => {
-    onFiltersChange({ timeFrom: '', timeTo: '', days: [], areaPreset: '', areaRadius: 5000, pickupArea: null, dropoffArea: null });
+    onFiltersChange({ timeFrom: '', timeTo: '', days: [], areaPreset: '', areaRadius: 5000, areaFilterMode: 'both', pickupArea: null, dropoffArea: null });
   };
 
   const hasFilters = filters.timeFrom || filters.timeTo || filters.days.length > 0 || filters.areaPreset;
@@ -68,9 +75,15 @@ const MapToolbar = ({
           <Layers className="w-3.5 h-3.5" />
           Lines
         </Button>
-        <Button variant={showConnectedRoutes ? 'secondary' : 'outline'} size="sm" onClick={onToggleConnectedRoutes} className="gap-1">
+        <Button
+          variant={showConnectedRoutes ? 'secondary' : 'outline'}
+          size="sm"
+          onClick={onToggleConnectedRoutes}
+          className="gap-1"
+          disabled={loadingRoutes}
+        >
           <Route className="w-3.5 h-3.5" />
-          {showConnectedRoutes ? 'Hide Routes' : 'Show Routes'}
+          {loadingRoutes ? 'Loading...' : showConnectedRoutes ? 'Hide Routes' : 'Show Routes'}
         </Button>
         <Button variant={routeMode ? 'default' : 'outline'} size="sm" onClick={onToggleRouteMode} className="gap-1">
           <Route className="w-3.5 h-3.5" />
@@ -108,17 +121,32 @@ const MapToolbar = ({
               </Select>
             </div>
             {filters.areaPreset && (
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">Radius: {(filters.areaRadius / 1000).toFixed(1)}km</span>
-                <Slider
-                  value={[filters.areaRadius]}
-                  min={1000}
-                  max={20000}
-                  step={500}
-                  onValueChange={([v]) => onFiltersChange({ ...filters, areaRadius: v })}
-                  className="w-24"
-                />
-              </div>
+              <>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">Mode:</span>
+                  <Select value={filters.areaFilterMode} onValueChange={(v: AreaFilterMode) => onFiltersChange({ ...filters, areaFilterMode: v })}>
+                    <SelectTrigger className="w-32 h-7 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AREA_MODE_LABELS.map(m => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">Radius: {(filters.areaRadius / 1000).toFixed(1)}km</span>
+                  <Slider
+                    value={[filters.areaRadius]}
+                    min={1000}
+                    max={20000}
+                    step={500}
+                    onValueChange={([v]) => onFiltersChange({ ...filters, areaRadius: v })}
+                    className="w-24"
+                  />
+                </div>
+              </>
             )}
             {hasFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 gap-1 text-xs">

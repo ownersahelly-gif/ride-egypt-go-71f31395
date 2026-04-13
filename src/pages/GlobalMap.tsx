@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow, Polyline, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow, Polyline, DirectionsRenderer, Circle } from '@react-google-maps/api';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import MapToolbar from '@/components/global-map/MapToolbar';
@@ -28,13 +28,17 @@ const GlobalMap = () => {
   const [loading, setLoading] = useState(true);
 
   // UI state
-  const [filters, setFilters] = useState<FilterState>({ timeFrom: '', timeTo: '', days: [], areaPreset: '', areaRadius: 5000, pickupArea: null, dropoffArea: null });
+  const [filters, setFilters] = useState<FilterState>({
+    timeFrom: '', timeTo: '', days: [], areaPreset: '', areaRadius: 5000,
+    areaFilterMode: 'both', pickupArea: null, dropoffArea: null,
+  });
   const [showFilters, setShowFilters] = useState(false);
   const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(new Set());
   const [selectedUser, setSelectedUser] = useState<RouteRequestUser | null>(null);
   const [showLines, setShowLines] = useState(false);
   const [showConnectedRoutes, setShowConnectedRoutes] = useState(false);
   const [connectedDirections, setConnectedDirections] = useState<google.maps.DirectionsResult[]>([]);
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
 
   // Route builder
   const [routeMode, setRouteMode] = useState(false);
@@ -50,7 +54,7 @@ const GlobalMap = () => {
 
   // Fetch data
   useEffect(() => {
-    const fetch = async () => {
+    const fetchData = async () => {
       setLoading(true);
       const [reqRes, profRes] = await Promise.all([
         supabase.from('route_requests').select('*').order('created_at', { ascending: false }),
@@ -61,10 +65,13 @@ const GlobalMap = () => {
       setAllUsers(deduplicateRequests(reqRes.data || [], profileMap));
       setLoading(false);
     };
-    fetch();
+    fetchData();
   }, []);
 
-  // Filter logic
+  // Get the active area preset
+  const activePreset = filters.areaPreset ? AREA_PRESETS.find(a => a.name === filters.areaPreset) : null;
+
+  // Filter logic — returns users AND controls which markers to show
   const filteredUsers = allUsers.filter(u => {
     if (hiddenUserIds.has(u.id)) return false;
 
@@ -83,13 +90,20 @@ const GlobalMap = () => {
       if (!filters.days.some(d => u.preferredDays.includes(d))) return false;
     }
 
-    // Area filter
-    if (filters.areaPreset) {
-      const preset = AREA_PRESETS.find(a => a.name === filters.areaPreset);
-      if (preset) {
-        const r = filters.areaRadius;
-        const pickupIn = isInRadius(u.originLat, u.originLng, preset.lat, preset.lng, r);
-        const dropoffIn = isInRadius(u.destinationLat, u.destinationLng, preset.lat, preset.lng, r);
+    // Area filter with mode
+    if (activePreset) {
+      const r = filters.areaRadius;
+      const pickupIn = isInRadius(u.originLat, u.originLng, activePreset.lat, activePreset.lng, r);
+      const dropoffIn = isInRadius(u.destinationLat, u.destinationLng, activePreset.lat, activePreset.lng, r);
+
+      if (filters.areaFilterMode === 'pickup') {
+        // Only users whose pickup is inside the circle
+        if (!pickupIn) return false;
+      } else if (filters.areaFilterMode === 'dropoff') {
+        // Only users whose dropoff is inside the circle
+        if (!dropoffIn) return false;
+      } else {
+        // Both: at least one must be inside
         if (!pickupIn && !dropoffIn) return false;
       }
     }
@@ -97,13 +111,32 @@ const GlobalMap = () => {
     return true;
   });
 
+  // Determine which markers to show based on area filter mode
+  const showPickupMarker = (u: RouteRequestUser) => {
+    if (!activePreset || filters.areaFilterMode === 'both') return true;
+    if (filters.areaFilterMode === 'pickup') return true; // show pickup markers (they're filtered to be inside)
+    // dropoff mode: only show dropoff markers of matching users, but also show their pickups? 
+    // Per user request: "only the drop offs of the people inside the circle should only be seen"
+    // So in dropoff mode, don't show pickups
+    if (filters.areaFilterMode === 'dropoff') return false;
+    return true;
+  };
+
+  const showDropoffMarker = (u: RouteRequestUser) => {
+    if (!activePreset || filters.areaFilterMode === 'both') return true;
+    if (filters.areaFilterMode === 'dropoff') return true;
+    // pickup mode: show only pickups inside circle + their dropoffs
+    // Per user request: "only these people inside the circle for pickup... and only the drop offs of the people inside the circle should only be seen"
+    if (filters.areaFilterMode === 'pickup') return true; // show dropoffs of matched users
+    return true;
+  };
+
   // Map click handler for route building
   const handleMapClick = useCallback(async (e: google.maps.MapMouseEvent) => {
     if (!routeMode || !e.latLng) return;
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
 
-    // Reverse geocode
     const geocoder = new google.maps.Geocoder();
     let name = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     try {
@@ -114,10 +147,8 @@ const GlobalMap = () => {
     if (!startPoint) {
       setStartPoint({ lat, lng, name });
     } else if (!endPoint) {
-      // If we already have stops, this becomes the end point
       setEndPoint({ lat, lng, name });
     } else {
-      // Add as stop before end
       const newStop: RouteStop = {
         id: crypto.randomUUID(),
         lat, lng, name,
@@ -152,14 +183,12 @@ const GlobalMap = () => {
 
       setGeneratedRoute(result);
 
-      // Reorder stops based on optimized order
       if (result.routes[0]?.waypoint_order) {
         const order = result.routes[0].waypoint_order;
         const reordered = order.map((i, idx) => ({ ...routeStops[i], order: idx }));
         setRouteStops(reordered);
       }
 
-      // Calculate total distance/duration
       const legs = result.routes[0]?.legs || [];
       const totalDist = legs.reduce((s, l) => s + (l.distance?.value || 0), 0);
       const totalDur = legs.reduce((s, l) => s + (l.duration?.value || 0), 0);
@@ -172,30 +201,109 @@ const GlobalMap = () => {
     }
   }, [startPoint, endPoint, routeStops, toast]);
 
-  // Show connected routes for all visible users
+  // Show connected routes: chain all pickups optimally, then connect to dropoffs
   const handleToggleConnectedRoutes = useCallback(async () => {
     if (showConnectedRoutes) {
       setShowConnectedRoutes(false);
       setConnectedDirections([]);
       return;
     }
+
+    const users = filteredUsers.slice(0, 25); // Limit for API quota
+    if (users.length < 2) {
+      toast({ title: 'Need at least 2 visible users', variant: 'destructive' });
+      return;
+    }
+
+    setLoadingRoutes(true);
     setShowConnectedRoutes(true);
-    // For performance, batch in groups of 10
     const ds = new google.maps.DirectionsService();
     const results: google.maps.DirectionsResult[] = [];
-    const batch = filteredUsers.slice(0, 25); // Limit to avoid quota
-    for (const u of batch) {
-      try {
-        const r = await ds.route({
-          origin: new google.maps.LatLng(u.originLat, u.originLng),
-          destination: new google.maps.LatLng(u.destinationLat, u.destinationLng),
-          travelMode: google.maps.TravelMode.DRIVING,
-        });
-        results.push(r);
-      } catch {}
+
+    try {
+      // Step 1: Chain all pickups together optimally
+      const pickupPoints = users.map(u => ({ lat: u.originLat, lng: u.originLng }));
+      
+      if (pickupPoints.length <= 25) {
+        // Use first pickup as origin, last as destination, rest as waypoints
+        const pickupOrigin = pickupPoints[0];
+        const pickupDest = pickupPoints[pickupPoints.length - 1];
+        const pickupWaypoints = pickupPoints.slice(1, -1).map(p => ({
+          location: new google.maps.LatLng(p.lat, p.lng),
+          stopover: true,
+        }));
+
+        try {
+          const pickupRoute = await ds.route({
+            origin: new google.maps.LatLng(pickupOrigin.lat, pickupOrigin.lng),
+            destination: new google.maps.LatLng(pickupDest.lat, pickupDest.lng),
+            waypoints: pickupWaypoints,
+            optimizeWaypoints: true,
+            travelMode: google.maps.TravelMode.DRIVING,
+          });
+          results.push(pickupRoute);
+        } catch (e) {
+          console.error('Pickup chain route failed:', e);
+        }
+      }
+
+      // Step 2: Chain all dropoffs together optimally
+      const dropoffPoints = users.map(u => ({ lat: u.destinationLat, lng: u.destinationLng }));
+
+      if (dropoffPoints.length <= 25) {
+        const dropOrigin = dropoffPoints[0];
+        const dropDest = dropoffPoints[dropoffPoints.length - 1];
+        const dropWaypoints = dropoffPoints.slice(1, -1).map(p => ({
+          location: new google.maps.LatLng(p.lat, p.lng),
+          stopover: true,
+        }));
+
+        try {
+          const dropoffRoute = await ds.route({
+            origin: new google.maps.LatLng(dropOrigin.lat, dropOrigin.lng),
+            destination: new google.maps.LatLng(dropDest.lat, dropDest.lng),
+            waypoints: dropWaypoints,
+            optimizeWaypoints: true,
+            travelMode: google.maps.TravelMode.DRIVING,
+          });
+          results.push(dropoffRoute);
+        } catch (e) {
+          console.error('Dropoff chain route failed:', e);
+        }
+      }
+
+      // Step 3: Connect last pickup to first dropoff (bridge)
+      if (results.length >= 1) {
+        // Get the optimized last pickup point
+        const pickupRoute = results[0];
+        const lastPickupLeg = pickupRoute.routes[0]?.legs;
+        const lastPickup = lastPickupLeg?.[lastPickupLeg.length - 1]?.end_location;
+        
+        // Get the optimized first dropoff point
+        const dropoffRoute = results.length >= 2 ? results[1] : null;
+        const firstDropoff = dropoffRoute?.routes[0]?.legs?.[0]?.start_location;
+
+        if (lastPickup && firstDropoff) {
+          try {
+            const bridgeRoute = await ds.route({
+              origin: lastPickup,
+              destination: firstDropoff,
+              travelMode: google.maps.TravelMode.DRIVING,
+            });
+            // Insert bridge between pickup and dropoff routes
+            results.splice(1, 0, bridgeRoute);
+          } catch (e) {
+            console.error('Bridge route failed:', e);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Connected routes error:', err);
     }
+
     setConnectedDirections(results);
-  }, [showConnectedRoutes, filteredUsers]);
+    setLoadingRoutes(false);
+  }, [showConnectedRoutes, filteredUsers, toast]);
 
   // Save route
   const handleSaveRoute = async () => {
@@ -221,7 +329,6 @@ const GlobalMap = () => {
 
       if (routeErr) throw routeErr;
 
-      // Insert stops
       if (routeStops.length > 0 && routeData) {
         const stopsToInsert = routeStops.map((s, i) => ({
           route_id: routeData.id,
@@ -236,7 +343,6 @@ const GlobalMap = () => {
       }
 
       toast({ title: 'Route saved!', description: `${routeNameEn} created with ${routeStops.length} stops` });
-      // Reset
       handleClearRoute();
       navigate('/admin');
     } catch (err: any) {
@@ -246,7 +352,6 @@ const GlobalMap = () => {
     }
   };
 
-  // Clear route
   const handleClearRoute = () => {
     setStartPoint(null);
     setEndPoint(null);
@@ -258,7 +363,6 @@ const GlobalMap = () => {
     setPrice('');
   };
 
-  // Assign user to stop
   const handleAssignUser = (userId: string, stopId: string) => {
     setRouteStops(prev => prev.map(s => {
       if (s.id === stopId) {
@@ -269,7 +373,6 @@ const GlobalMap = () => {
     }));
   };
 
-  // Hide/unhide
   const toggleHide = (userId: string) => {
     setHiddenUserIds(prev => {
       const next = new Set(prev);
@@ -285,6 +388,9 @@ const GlobalMap = () => {
       </div>
     );
   }
+
+  // Route colors for connected routes visualization
+  const routeColors = ['#22c55e', '#ef4444', '#f59e0b']; // green for pickups, red for dropoffs, amber for bridge
 
   return (
     <div className="h-screen w-screen relative overflow-hidden">
@@ -302,6 +408,7 @@ const GlobalMap = () => {
         totalCount={allUsers.length}
         showFilters={showFilters}
         onToggleFilters={() => setShowFilters(!showFilters)}
+        loadingRoutes={loadingRoutes}
       />
 
       <UserSidebar
@@ -351,8 +458,23 @@ const GlobalMap = () => {
           streetViewControl: false,
         }}
       >
-        {/* Pickup markers (green) */}
-        {filteredUsers.map(u => (
+        {/* Area filter circle */}
+        {activePreset && (
+          <Circle
+            center={{ lat: activePreset.lat, lng: activePreset.lng }}
+            radius={filters.areaRadius}
+            options={{
+              fillColor: filters.areaFilterMode === 'pickup' ? '#22c55e' : filters.areaFilterMode === 'dropoff' ? '#ef4444' : '#3b82f6',
+              fillOpacity: 0.1,
+              strokeColor: filters.areaFilterMode === 'pickup' ? '#22c55e' : filters.areaFilterMode === 'dropoff' ? '#ef4444' : '#3b82f6',
+              strokeWeight: 2,
+              strokeOpacity: 0.6,
+            }}
+          />
+        )}
+
+        {/* Pickup markers (green) — only show based on area filter mode */}
+        {filteredUsers.filter(showPickupMarker).map(u => (
           <Marker
             key={`p-${u.id}`}
             position={{ lat: u.originLat, lng: u.originLng }}
@@ -364,8 +486,8 @@ const GlobalMap = () => {
           />
         ))}
 
-        {/* Dropoff markers (red) */}
-        {filteredUsers.map(u => (
+        {/* Dropoff markers (red) — only show based on area filter mode */}
+        {filteredUsers.filter(showDropoffMarker).map(u => (
           <Marker
             key={`d-${u.id}`}
             position={{ lat: u.destinationLat, lng: u.destinationLng }}
@@ -394,14 +516,18 @@ const GlobalMap = () => {
           />
         ))}
 
-        {/* Connected routes */}
+        {/* Connected routes (pickup chain → bridge → dropoff chain) */}
         {connectedDirections.map((dir, i) => (
           <DirectionsRenderer
             key={`cr-${i}`}
             directions={dir}
             options={{
               suppressMarkers: true,
-              polylineOptions: { strokeColor: '#f59e0b', strokeWeight: 2, strokeOpacity: 0.6 },
+              polylineOptions: {
+                strokeColor: routeColors[i] || '#f59e0b',
+                strokeWeight: 3,
+                strokeOpacity: 0.7,
+              },
             }}
           />
         ))}
@@ -445,15 +571,6 @@ const GlobalMap = () => {
             }}
           />
         ))}
-
-        {/* Area filter circle */}
-        {filters.areaPreset && (() => {
-          const preset = AREA_PRESETS.find(a => a.name === filters.areaPreset);
-          if (!preset) return null;
-          return (
-            <></>
-          );
-        })()}
 
         {/* InfoWindow */}
         {selectedUser && (

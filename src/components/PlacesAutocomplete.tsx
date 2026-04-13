@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { MapPin, Loader2 } from 'lucide-react';
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-const libraries: ('places')[] = ['places'];
+const libraries: ('places' | 'drawing' | 'geometry')[] = ['places', 'drawing', 'geometry'];
 
 interface PlacesAutocompleteProps {
   placeholder?: string;

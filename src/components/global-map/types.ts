@@ -32,12 +32,15 @@ export interface RouteStop {
   order: number;
 }
 
+export type AreaFilterMode = 'both' | 'pickup' | 'dropoff';
+
 export interface FilterState {
   timeFrom: string;
   timeTo: string;
   days: number[];
   areaPreset: string;
   areaRadius: number;
+  areaFilterMode: AreaFilterMode;
   pickupArea: google.maps.Circle | null;
   dropoffArea: google.maps.Circle | null;
 }
