@@ -47,6 +47,8 @@ const MyBookings = () => {
   const [editSelectedPickupStop, setEditSelectedPickupStop] = useState<any>(null);
   const [editSelectedDropoffStop, setEditSelectedDropoffStop] = useState<any>(null);
   const [savingLocation, setSavingLocation] = useState(false);
+  const [editMapCenter, setEditMapCenter] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [editMapZoom, setEditMapZoom] = useState<number>(12);
 
   useEffect(() => {
     if (!user) return;
@@ -471,6 +473,14 @@ const MyBookings = () => {
                             <p className="text-[10px] text-muted-foreground">{lang === 'ar' ? 'نقطة الركوب' : 'Pickup'}</p>
                             <p className="text-foreground text-xs truncate">{booking.custom_pickup_name}</p>
                           </div>
+                          {booking.custom_pickup_lat && booking.custom_pickup_lng && (
+                            <a href={`https://www.google.com/maps/dir/?api=1&destination=${booking.custom_pickup_lat},${booking.custom_pickup_lng}`}
+                              target="_blank" rel="noopener noreferrer" className="shrink-0">
+                              <Button variant="ghost" size="icon" className="w-7 h-7 text-primary">
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </Button>
+                            </a>
+                          )}
                         </div>
                       )}
                       {booking.custom_dropoff_name && (
@@ -480,17 +490,23 @@ const MyBookings = () => {
                             <p className="text-[10px] text-muted-foreground">{lang === 'ar' ? 'نقطة النزول' : 'Dropoff'}</p>
                             <p className="text-foreground text-xs truncate">{booking.custom_dropoff_name}</p>
                           </div>
+                          {booking.custom_dropoff_lat && booking.custom_dropoff_lng && (
+                            <a href={`https://www.google.com/maps/dir/?api=1&destination=${booking.custom_dropoff_lat},${booking.custom_dropoff_lng}`}
+                              target="_blank" rel="noopener noreferrer" className="shrink-0">
+                              <Button variant="ghost" size="icon" className="w-7 h-7 text-primary">
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </Button>
+                            </a>
+                          )}
                         </div>
                       )}
                       {['confirmed', 'pending', 'quote_pending'].includes(booking.status) && !isExpired && (
                         <Button variant="outline" size="sm" className="w-full mt-2" onClick={async () => {
                           setEditingBooking(booking);
-                          // Fetch stops for this route
                           if (booking.route_id) {
                             const { data: stops } = await supabase.from('stops').select('*').eq('route_id', booking.route_id).order('stop_order');
                             setEditStops(stops || []);
                           }
-                          // Determine current mode from existing data
                           const route = booking.routes;
                           const isPickupAtOrigin = !booking.custom_pickup_lat || 
                             (Math.abs(booking.custom_pickup_lat - route?.origin_lat) < 0.001 && Math.abs(booking.custom_pickup_lng - route?.origin_lng) < 0.001);
@@ -500,6 +516,8 @@ const MyBookings = () => {
                           setEditDropoffMode(isDropoffAtDest ? 'end' : 'stop');
                           setEditSelectedPickupStop(null);
                           setEditSelectedDropoffStop(null);
+                          setEditMapCenter(undefined);
+                          setEditMapZoom(12);
                         }}>
                           <Edit3 className="w-3.5 h-3.5 me-1" />
                           {lang === 'ar' ? 'تعديل الموقع' : 'Edit Location'}
