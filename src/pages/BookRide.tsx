@@ -1237,7 +1237,18 @@ const BookRide = () => {
 
             {/* Review & Continue */}
             <div className="bg-card border border-border rounded-2xl p-5">
-              {selectedRide._type === 'published' ? (
+              {existingBooking ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-green-600 font-medium p-3 bg-green-50 dark:bg-green-950/30 rounded-xl">
+                    <CheckCircle2 className="w-5 h-5" />
+                    {lang === 'ar' ? 'لقد حجزت هذه الرحلة بالفعل' : 'You have already booked this ride'}
+                  </div>
+                  <Button className="w-full" size="lg" variant="secondary" onClick={() => navigate('/my-bookings')}>
+                    {lang === 'ar' ? 'عرض حجوزاتي' : 'View My Bookings'}
+                    <ArrowRight className="w-4 h-4 ms-1" />
+                  </Button>
+                </div>
+              ) : selectedRide._type === 'published' ? (
                 <Button className="w-full" size="lg" onClick={() => handleBook(false)}
                   disabled={loading || !isPickupValid || !isDropoffValid}>
                   {loading
