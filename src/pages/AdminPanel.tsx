@@ -568,19 +568,42 @@ const AdminPanel = () => {
   const addStop = async (routeId: string) => {
     if (!stopForm.name_en || !stopForm.name_ar) return;
     setAddingStop(true);
+    const pairedRouteId = findPairedRouteId(routeId);
+    
     if (editingStopId) {
+      // Find the old stop data before updating (to find match in paired route)
+      const oldStop = (routeStopsMap[routeId] || []).find(s => s.id === editingStopId);
+      
       const { error } = await supabase.from('stops').update({
         name_en: stopForm.name_en,
         name_ar: stopForm.name_ar,
         lat: stopForm.lat,
         lng: stopForm.lng,
         stop_type: stopForm.stop_type,
-        // keep existing stop_order when editing
         arrival_time: stopForm.arrival_time || null,
       }).eq('id', editingStopId);
       if (error) toast.error(error.message);
       else {
         toast.success(lang === 'ar' ? 'تم تحديث نقطة التوقف' : 'Stop updated');
+        
+        // Sync update to paired route
+        if (pairedRouteId && oldStop) {
+          const { data: pairedStops } = await supabase.from('stops').select('*').eq('route_id', pairedRouteId).order('stop_order');
+          const matchingStop = pairedStops?.find(s => s.name_en === oldStop.name_en && s.name_ar === oldStop.name_ar);
+          if (matchingStop) {
+            await supabase.from('stops').update({
+              name_en: stopForm.name_en,
+              name_ar: stopForm.name_ar,
+              lat: stopForm.lat,
+              lng: stopForm.lng,
+              stop_type: stopForm.stop_type,
+              arrival_time: stopForm.arrival_time || null,
+            }).eq('id', matchingStop.id);
+            await fetchStopsForRoute(pairedRouteId);
+            toast.info(lang === 'ar' ? 'تم تحديث المحطة في المسار المعاكس أيضاً' : 'Stop also updated in paired route');
+          }
+        }
+        
         setEditingStopId(null);
         setStopForm({ name_en: '', name_ar: '', lat: 0, lng: 0, stop_type: 'both', arrival_time: '' });
         await fetchStopsForRoute(routeId);
@@ -599,6 +622,20 @@ const AdminPanel = () => {
       if (error) toast.error(error.message);
       else {
         toast.success(lang === 'ar' ? 'تمت إضافة نقطة التوقف' : 'Stop added');
+        
+        // Sync to paired route
+        if (pairedRouteId) {
+          await syncStopToPairedRoute(pairedRouteId, {
+            name_en: stopForm.name_en,
+            name_ar: stopForm.name_ar,
+            lat: stopForm.lat,
+            lng: stopForm.lng,
+            stop_type: stopForm.stop_type,
+            arrival_time: stopForm.arrival_time || null,
+          });
+          toast.info(lang === 'ar' ? 'تمت إضافة المحطة في المسار المعاكس أيضاً' : 'Stop also added to paired route');
+        }
+        
         setStopForm({ name_en: '', name_ar: '', lat: 0, lng: 0, stop_type: 'both', arrival_time: '' });
         await fetchStopsForRoute(routeId);
       }
