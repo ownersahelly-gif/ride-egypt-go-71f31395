@@ -66,6 +66,8 @@ const AdminPanel = () => {
   const [editingStopId, setEditingStopId] = useState<string | null>(null);
   const [globalWaitingTime, setGlobalWaitingTime] = useState('3');
   const [savingWaitingTime, setSavingWaitingTime] = useState(false);
+  const [dragStopIndex, setDragStopIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Content settings
   const [contentSettings, setContentSettings] = useState<Record<string, string>>({});
