@@ -60,6 +60,7 @@ const BookRide = () => {
   const [selectedRide, setSelectedRide] = useState<any>(null);
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [shuttleInfo, setShuttleInfo] = useState<any>(null);
+  const [existingBooking, setExistingBooking] = useState<any>(null);
 
   // Route directions result
   const [routeDirections, setRouteDirections] = useState<any>(null);
