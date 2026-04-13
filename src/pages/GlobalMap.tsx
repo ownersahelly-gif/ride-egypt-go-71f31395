@@ -494,22 +494,28 @@ const GlobalMap = () => {
 
   // Open route in Google Maps
   const handleOpenInGoogleMaps = useCallback(() => {
-    if (connectedDirections.length === 0) return;
-    
-    // Collect all stop coordinates from the connected directions
-    const allPoints: { lat: number; lng: number }[] = [];
-    connectedDirections.forEach(dir => {
-      dir.routes[0]?.legs?.forEach((leg, i) => {
-        if (i === 0) allPoints.push({ lat: leg.start_location.lat(), lng: leg.start_location.lng() });
-        allPoints.push({ lat: leg.end_location.lat(), lng: leg.end_location.lng() });
-      });
+    const users = filteredUsers.slice(0, 25);
+    if (users.length < 1) return;
+
+    // Build ordered points: all pickups then all dropoffs
+    const pickups = users.map(u => ({ lat: u.originLat, lng: u.originLng }));
+    const dropoffs = users.map(u => ({ lat: u.destinationLat, lng: u.destinationLng }));
+    const allPoints = [...pickups, ...dropoffs];
+
+    // Deduplicate by proximity
+    const unique: { lat: number; lng: number }[] = [];
+    allPoints.forEach(p => {
+      if (!unique.some(u => Math.abs(u.lat - p.lat) < 0.0005 && Math.abs(u.lng - p.lng) < 0.0005)) {
+        unique.push(p);
+      }
     });
 
-    if (allPoints.length < 2) return;
+    if (unique.length < 2) return;
 
-    const origin = allPoints[0];
-    const destination = allPoints[allPoints.length - 1];
-    const waypoints = allPoints.slice(1, -1);
+    const origin = unique[0];
+    const destination = unique[unique.length - 1];
+    // Google Maps URL supports max ~10 waypoints
+    const waypoints = unique.slice(1, -1).slice(0, 10);
 
     let url = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${destination.lat},${destination.lng}&travelmode=driving`;
     if (waypoints.length > 0) {
@@ -517,7 +523,7 @@ const GlobalMap = () => {
       url += `&waypoints=${encodeURIComponent(wp)}`;
     }
     window.open(url, '_blank');
-  }, [connectedDirections]);
+  }, [filteredUsers]);
 
   const handleAssignUser = (userId: string, stopId: string) => {
     setRouteStops(prev => prev.map(s => {
