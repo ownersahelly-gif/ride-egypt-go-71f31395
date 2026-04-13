@@ -85,6 +85,13 @@ const AdminPanel = () => {
   const [showRejectInput, setShowRejectInput] = useState<string | null>(null);
   const [partnerPackageRequests, setPartnerPackageRequests] = useState<any[]>([]);
 
+  // Published trips
+  const [publishedTrips, setPublishedTrips] = useState<any[]>([]);
+  const [publishRouteId, setPublishRouteId] = useState<string | null>(null);
+  const [publishDate, setPublishDate] = useState(new Date().toISOString().split('T')[0]);
+  const [publishTime, setPublishTime] = useState('08:00');
+  const [publishingTrip, setPublishingTrip] = useState(false);
+
   // User filters
   const [userTypeFilter, setUserTypeFilter] = useState('all');
   const [userTimeFilter, setUserTimeFilter] = useState('all');
