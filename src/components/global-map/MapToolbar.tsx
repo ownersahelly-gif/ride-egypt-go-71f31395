@@ -104,6 +104,12 @@ const MapToolbar = ({
           <Route className="w-3.5 h-3.5" />
           {loadingRoutes ? 'Loading...' : showConnectedRoutes ? 'Hide Routes' : 'Show Routes'}
         </Button>
+        {canSaveConnectedRoute && (
+          <Button size="sm" onClick={onSaveConnectedRoute} disabled={savingConnectedRoute} className="gap-1">
+            <Save className="w-3.5 h-3.5" />
+            {savingConnectedRoute ? 'Saving...' : 'Save to Routes'}
+          </Button>
+        )}
         <Button variant={routeMode ? 'default' : 'outline'} size="sm" onClick={onToggleRouteMode} className="gap-1">
           <Route className="w-3.5 h-3.5" />
           {routeMode ? 'Building...' : 'Build Route'}
