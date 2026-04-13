@@ -1041,7 +1041,8 @@ const BookRide = () => {
               {renderStopSelector('dropoff')}
             </div>
 
-            {/* Trip Direction */}
+            {/* Trip Direction — hide for published trips */}
+            {selectedRide._type !== 'published' && (
             <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
               <h3 className="font-semibold text-foreground flex items-center gap-2">
                 <ArrowRight className="w-4 h-4 text-primary" />
@@ -1074,6 +1075,8 @@ const BookRide = () => {
                   ))}
                 </div>
               )}
+            </div>
+            )}
             </div>
 
             {/* Active Bundle */}
