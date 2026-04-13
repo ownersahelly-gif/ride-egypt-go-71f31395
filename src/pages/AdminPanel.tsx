@@ -713,6 +713,123 @@ const AdminPanel = () => {
     fetchAllData();
   };
 
+  // Reverse route - duplicate route in opposite direction with stops snapped to return road
+  const reverseRoute = async (route: any) => {
+    if (!confirm(lang === 'ar' 
+      ? 'سيتم إنشاء مسار معكوس من الوجهة إلى نقطة الانطلاق مع نقل المحطات للطريق المعاكس. متابعة؟' 
+      : 'This will create a reversed route from destination to origin with stops snapped to the return road. Continue?')) return;
+
+    toast.info(lang === 'ar' ? 'جاري إنشاء المسار المعكوس...' : 'Creating reversed route...');
+
+    // Create the reversed route
+    const { data: newRoute, error: routeError } = await supabase.from('routes').insert({
+      name_en: `${route.name_en} (Return)`,
+      name_ar: `${route.name_ar} (عودة)`,
+      origin_name_en: route.destination_name_en,
+      origin_name_ar: route.destination_name_ar,
+      origin_lat: route.destination_lat,
+      origin_lng: route.destination_lng,
+      destination_name_en: route.origin_name_en,
+      destination_name_ar: route.origin_name_ar,
+      destination_lat: route.origin_lat,
+      destination_lng: route.origin_lng,
+      price: route.price,
+      estimated_duration_minutes: route.estimated_duration_minutes,
+      status: 'active',
+    }).select().single();
+
+    if (routeError || !newRoute) {
+      toast.error(routeError?.message || 'Failed to create route');
+      return;
+    }
+
+    // Fetch original stops
+    const { data: originalStops } = await supabase.from('stops')
+      .select('*')
+      .eq('route_id', route.id)
+      .order('stop_order', { ascending: true });
+
+    if (originalStops && originalStops.length > 0) {
+      // Reverse the stops order
+      const reversedStops = [...originalStops].reverse();
+
+      // Try to snap each stop to the return road using Google Directions API
+      let snappedStops = reversedStops;
+      
+      if (window.google?.maps) {
+        try {
+          const directionsService = new google.maps.DirectionsService();
+          
+          // Get directions for the return route
+          const waypoints = reversedStops.slice(1, -1).map(s => ({
+            location: new google.maps.LatLng(s.lat, s.lng),
+            stopover: true,
+          }));
+
+          const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
+            directionsService.route({
+              origin: new google.maps.LatLng(route.destination_lat, route.destination_lng),
+              destination: new google.maps.LatLng(route.origin_lat, route.origin_lng),
+              waypoints: waypoints.length > 0 ? waypoints : undefined,
+              travelMode: google.maps.TravelMode.DRIVING,
+              optimizeWaypoints: false,
+            }, (res, status) => {
+              if (status === 'OK' && res) resolve(res);
+              else reject(status);
+            });
+          });
+
+          // Extract snapped waypoint locations from legs
+          if (result.routes[0]?.legs) {
+            const legs = result.routes[0].legs;
+            // Each leg's end_location is the snapped waypoint (except the last leg which ends at destination)
+            const snappedCoords: { lat: number; lng: number }[] = [];
+            
+            // First stop is the route destination (now origin) - use as-is
+            snappedCoords.push({ lat: route.destination_lat, lng: route.destination_lng });
+            
+            // Intermediate stops from leg end locations
+            for (let i = 0; i < legs.length - 1; i++) {
+              const endLoc = legs[i].end_location;
+              snappedCoords.push({ lat: endLoc.lat(), lng: endLoc.lng() });
+            }
+            
+            // Last stop is the route origin (now destination) - use as-is
+            snappedCoords.push({ lat: route.origin_lat, lng: route.origin_lng });
+
+            // Apply snapped coords to intermediate stops only (skip first and last as they're origin/dest)
+            snappedStops = reversedStops.map((stop, i) => {
+              if (i > 0 && i < reversedStops.length - 1 && snappedCoords[i]) {
+                return { ...stop, lat: snappedCoords[i].lat, lng: snappedCoords[i].lng };
+              }
+              return stop;
+            });
+          }
+        } catch (err) {
+          console.warn('Could not snap stops to return road, using original coords:', err);
+        }
+      }
+
+      // Insert reversed stops
+      const stopsToInsert = snappedStops.map((s, i) => ({
+        route_id: newRoute.id,
+        name_en: s.name_en,
+        name_ar: s.name_ar,
+        lat: parseFloat(s.lat.toFixed(6)),
+        lng: parseFloat(s.lng.toFixed(6)),
+        stop_order: i + 1,
+        stop_type: s.stop_type,
+      }));
+
+      const { error: stopsError } = await supabase.from('stops').insert(stopsToInsert);
+      if (stopsError) {
+        toast.error(lang === 'ar' ? 'تم إنشاء المسار لكن فشل إضافة المحطات' : 'Route created but failed to add stops');
+      }
+    }
+
+    toast.success(lang === 'ar' ? 'تم إنشاء المسار المعكوس بنجاح!' : 'Reversed route created successfully!');
+    fetchAllData();
+
   const pendingBookings = bookings.filter(b => b.status === 'pending').sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   const waitlistBookings = bookings.filter(b => b.status === 'waitlist').sort((a, b) => (a.waitlist_position || 0) - (b.waitlist_position || 0));
 
