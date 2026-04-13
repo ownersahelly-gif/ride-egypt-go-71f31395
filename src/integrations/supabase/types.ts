@@ -967,6 +967,47 @@ export type Database = {
           },
         ]
       }
+      published_trips: {
+        Row: {
+          created_at: string
+          departure_time: string
+          id: string
+          notes: string | null
+          route_id: string
+          status: string
+          trip_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          departure_time: string
+          id?: string
+          notes?: string | null
+          route_id: string
+          status?: string
+          trip_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          departure_time?: string
+          id?: string
+          notes?: string | null
+          route_id?: string
+          status?: string
+          trip_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "published_trips_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ratings: {
         Row: {
           booking_id: string
