@@ -2331,9 +2331,41 @@ const AdminPanel = () => {
             ? ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
             : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+          const getEditedRoute = (gi: number): GeneratedRoute => {
+            if (editedGroupStops[gi]) return editedGroupStops[gi]!;
+            return generateSmartRoute(groups[gi]);
+          };
+
+          const updateStopInGroup = (gi: number, stopIdx: number, lat: number, lng: number, name?: string) => {
+            const route = { ...getEditedRoute(gi) };
+            const stops = [...route.stops];
+            stops[stopIdx] = { ...stops[stopIdx], lat, lng, name: name || stops[stopIdx].name };
+            setEditedGroupStops(prev => ({ ...prev, [gi]: { ...route, stops } }));
+          };
+
+          const removeStopFromGroup = (gi: number, stopIdx: number) => {
+            const route = { ...getEditedRoute(gi) };
+            const stops = route.stops.filter((_, i) => i !== stopIdx);
+            setEditedGroupStops(prev => ({ ...prev, [gi]: { ...route, stops } }));
+          };
+
+          const addStopToGroup = (gi: number, lat: number, lng: number) => {
+            const route = { ...getEditedRoute(gi) };
+            const stops = [...route.stops, { lat, lng, name: `Stop ${route.stops.length + 1}`, userCount: 0, userIds: [] }];
+            setEditedGroupStops(prev => ({ ...prev, [gi]: { ...route, stops } }));
+          };
+
+          const reorderStopInGroup = (gi: number, fromIdx: number, toIdx: number) => {
+            const route = { ...getEditedRoute(gi) };
+            const stops = [...route.stops];
+            const [moved] = stops.splice(fromIdx, 1);
+            stops.splice(toIdx, 0, moved);
+            setEditedGroupStops(prev => ({ ...prev, [gi]: { ...route, stops } }));
+          };
+
           const handleCreateOfficialRoute = async (gi: number) => {
             const group = groups[gi];
-            const generated = generateSmartRoute(group);
+            const generated = getEditedRoute(gi);
             setCreatingRouteFromGroup(gi);
             try {
               const routeName = `${generated.origin.name} → ${generated.destination.name}`;
