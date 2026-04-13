@@ -1077,7 +1077,6 @@ const BookRide = () => {
               )}
             </div>
             )}
-            </div>
 
             {/* Active Bundle */}
             {activeBundlePurchase && (
