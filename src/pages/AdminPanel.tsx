@@ -257,6 +257,87 @@ const AdminPanel = () => {
     setSavingAppName(false);
   };
 
+  const parseGoogleMapsLink = async () => {
+    if (!mapsLink.trim()) return;
+    setParsingLink(true);
+    try {
+      // Parse Google Maps directions URL
+      // Format: https://www.google.com/maps/dir/Place1/Place2/Place3/@lat,lng,zoom
+      // Or: https://www.google.com/maps/dir/lat1,lng1/lat2,lng2/...
+      let url = mapsLink.trim();
+      
+      // Extract the path after /dir/
+      const dirMatch = url.match(/\/dir\/(.+?)(?:\/@|$|\?)/);
+      if (!dirMatch) {
+        toast.error(lang === 'ar' ? 'رابط غير صالح - استخدم رابط اتجاهات Google Maps' : 'Invalid link - use a Google Maps directions URL');
+        setParsingLink(false);
+        return;
+      }
+
+      const segments = dirMatch[1].split('/').filter(s => s.trim() !== '');
+      if (segments.length < 2) {
+        toast.error(lang === 'ar' ? 'يجب أن يحتوي الرابط على نقطتين على الأقل' : 'Link must have at least 2 points');
+        setParsingLink(false);
+        return;
+      }
+
+      // Geocode each segment to get lat/lng and name
+      const geocoder = new google.maps.Geocoder();
+      const resolveSegment = (seg: string): Promise<{ lat: number; lng: number; name: string }> => {
+        return new Promise((resolve, reject) => {
+          // Check if segment is already coordinates
+          const coordMatch = seg.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
+          if (coordMatch) {
+            const lat = parseFloat(coordMatch[1]);
+            const lng = parseFloat(coordMatch[2]);
+            geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+              const name = status === 'OK' && results?.[0] ? results[0].formatted_address : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+              resolve({ lat, lng, name });
+            });
+          } else {
+            // It's a place name, geocode it
+            const decoded = decodeURIComponent(seg.replace(/\+/g, ' '));
+            geocoder.geocode({ address: decoded }, (results, status) => {
+              if (status === 'OK' && results?.[0]) {
+                const loc = results[0].geometry.location;
+                resolve({ lat: loc.lat(), lng: loc.lng(), name: results[0].formatted_address });
+              } else {
+                reject(new Error(`Could not find: ${decoded}`));
+              }
+            });
+          }
+        });
+      };
+
+      const points = await Promise.all(segments.map(s => resolveSegment(s)));
+      const origin = points[0];
+      const destination = points[points.length - 1];
+      const middleStops = points.slice(1, -1);
+
+      setRouteForm(p => ({
+        ...p,
+        origin_lat: parseFloat(origin.lat.toFixed(6)),
+        origin_lng: parseFloat(origin.lng.toFixed(6)),
+        origin_name_en: origin.name,
+        origin_name_ar: origin.name,
+        destination_lat: parseFloat(destination.lat.toFixed(6)),
+        destination_lng: parseFloat(destination.lng.toFixed(6)),
+        destination_name_en: destination.name,
+        destination_name_ar: destination.name,
+        name_en: p.name_en || `${origin.name.split(',')[0]} → ${destination.name.split(',')[0]}`,
+        name_ar: p.name_ar || `${origin.name.split(',')[0]} → ${destination.name.split(',')[0]}`,
+      }));
+
+      setImportedStops(middleStops);
+      toast.success(lang === 'ar' 
+        ? `تم استيراد ${points.length} نقاط (${middleStops.length} محطات وسطية)` 
+        : `Imported ${points.length} points (${middleStops.length} intermediate stops)`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to parse link');
+    }
+    setParsingLink(false);
+  };
+
   const createRoute = async () => {
     const routeData = {
       ...routeForm,
