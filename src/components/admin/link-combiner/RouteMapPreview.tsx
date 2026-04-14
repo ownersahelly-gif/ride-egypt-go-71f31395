@@ -39,6 +39,8 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
+  const [routeName, setRouteName] = useState('');
+  const [saving, setSaving] = useState(false);
   const [initialCenter] = useState<google.maps.LatLngLiteral>(() => {
     if (stops.length === 0) return { lat: 30.05, lng: 31.25 };
     const lat = stops.reduce((sum, stop) => sum + stop.lat, 0) / stops.length;
