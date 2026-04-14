@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleMap, Marker, Polyline } from '@react-google-maps/api';
 import { Button } from '@/components/ui/button';
-import { Copy, ExternalLink, MapPin, Trash2, GripVertical, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Copy, ExternalLink, MapPin, Trash2, GripVertical, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import type { OrderedStop } from './types';
 import { buildGoogleMapsLink, haversine } from './utils';
 
