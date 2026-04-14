@@ -428,6 +428,36 @@ export type Database = {
         }
         Relationships: []
       }
+      combined_routes: {
+        Row: {
+          created_at: string
+          created_by: string
+          final_link: string
+          id: string
+          name: string | null
+          stops_json: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          final_link?: string
+          id?: string
+          name?: string | null
+          stops_json?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          final_link?: string
+          id?: string
+          name?: string | null
+          stops_json?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       device_tokens: {
         Row: {
           created_at: string
