@@ -43,7 +43,7 @@ const IncomingCall = () => {
       await client.publish([localAudioTrack]);
 
       // Subscribe to remote users
-      client.on('user-published', async (user: any, mediaType: string) => {
+      client.on('user-published', async (user: any, mediaType: "audio" | "video" | "datachannel") => {
         await client.subscribe(user, mediaType);
         if (mediaType === 'audio') {
           user.audioTrack?.play();

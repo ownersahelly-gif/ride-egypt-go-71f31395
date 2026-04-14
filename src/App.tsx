@@ -33,6 +33,8 @@ import NotFound from "./pages/NotFound.tsx";
 import Legal from "./pages/Legal.tsx";
 import Support from "./pages/Support.tsx";
 import GlobalNotifications from "./components/GlobalNotifications";
+import IncomingCall from "./pages/IncomingCall";
+import { useIncomingCall } from "./hooks/useIncomingCall";
 
 const queryClient = new QueryClient();
 
