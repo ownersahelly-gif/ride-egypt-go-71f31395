@@ -285,7 +285,7 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
         ))}
       </div>
 
-      {/* Final link */}
+      {/* Save & Final link */}
       <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-3">
         <p className="text-sm font-semibold text-primary">
           {lang === 'ar' ? 'الرابط النهائي' : 'Final Route Link'}
@@ -299,6 +299,23 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
             <ExternalLink className="w-4 h-4" />
           </Button>
         </div>
+
+        {/* Save to database */}
+        <div className="flex gap-2 items-end pt-2 border-t border-border">
+          <div className="flex-1">
+            <Input
+              placeholder={lang === 'ar' ? 'اسم المسار (اختياري)...' : 'Route name (optional)...'}
+              value={routeName}
+              onChange={(e) => setRouteName(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+          <Button onClick={handleSave} disabled={saving || stops.length < 2} className="gap-2">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {lang === 'ar' ? 'حفظ' : 'Save Route'}
+          </Button>
+        </div>
+
         <p className="text-xs text-muted-foreground">
           {lang === 'ar'
             ? 'اسحب المحطات لتغيير الترتيب أو احذفها — الخريطة والرابط يتحدثان تلقائياً'
