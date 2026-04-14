@@ -29,6 +29,8 @@ export interface AppSettings {
   feature_carpool_enabled: string;
   feature_packages_enabled: string;
   feature_track_shuttle_enabled: string;
+  // Support
+  support_email: string;
   // Other
   instapay_phone: string;
   stop_waiting_time_minutes: string;
@@ -59,6 +61,7 @@ const DEFAULTS: AppSettings = {
   feature_carpool_enabled: 'true',
   feature_packages_enabled: 'true',
   feature_track_shuttle_enabled: 'true',
+  support_email: 'support@massar-app.com',
   instapay_phone: '',
   stop_waiting_time_minutes: '3',
   price_per_km: '5',

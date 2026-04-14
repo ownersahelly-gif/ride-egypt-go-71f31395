@@ -31,6 +31,7 @@ import PartnerDashboard from "./pages/PartnerDashboard.tsx";
 import GlobalMap from "./pages/GlobalMap.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Legal from "./pages/Legal.tsx";
+import Support from "./pages/Support.tsx";
 import GlobalNotifications from "./components/GlobalNotifications";
 
 const queryClient = new QueryClient();
@@ -68,6 +69,7 @@ const App = () => (
               <Route path="/carpool/route/:id" element={<ProtectedRoute><CarpoolRoute /></ProtectedRoute>} />
               <Route path="/carpool/manage/:id" element={<ProtectedRoute><CarpoolManage /></ProtectedRoute>} />
               <Route path="/legal" element={<Legal />} />
+              <Route path="/support" element={<Support />} />
               <Route path="/partner" element={<ProtectedRoute><PartnerDashboard /></ProtectedRoute>} />
               <Route path="/admin/global-map" element={<ProtectedRoute><GlobalMap /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
