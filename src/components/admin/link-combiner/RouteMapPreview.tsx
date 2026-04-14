@@ -1,7 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { GoogleMap, Marker, Polyline } from '@react-google-maps/api';
 import { Button } from '@/components/ui/button';
-import { ArrowUp, ArrowDown, Copy, ExternalLink, MapPin } from 'lucide-react';
+import { Copy, ExternalLink, MapPin, Trash2, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import type { OrderedStop } from './types';
 import { buildGoogleMapsLink, haversine } from './utils';
@@ -16,6 +16,10 @@ const PICKUP_COLORS = ['#22c55e', '#16a34a', '#15803d', '#166534', '#14532d'];
 const DROPOFF_COLORS = ['#ef4444', '#dc2626', '#b91c1c', '#991b1b', '#7f1d1d'];
 
 const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+  const dragRef = useRef<number | null>(null);
+
   const center = useMemo(() => {
     if (stops.length === 0) return { lat: 30.05, lng: 31.25 };
     const lat = stops.reduce((s, p) => s + p.lat, 0) / stops.length;
@@ -31,13 +35,41 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
     return d;
   }, [stops]);
 
-  const moveStop = useCallback((idx: number, direction: -1 | 1) => {
-    const newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= stops.length) return;
-    const newStops = [...stops];
-    [newStops[idx], newStops[newIdx]] = [newStops[newIdx], newStops[idx]];
+  const deleteStop = useCallback((idx: number) => {
+    const newStops = stops.filter((_, i) => i !== idx);
     onReorder(newStops);
-  }, [stops, onReorder]);
+    toast.success(lang === 'ar' ? 'تم حذف المحطة' : 'Stop removed');
+  }, [stops, onReorder, lang]);
+
+  const handleDragStart = (idx: number) => {
+    setDragIdx(idx);
+    dragRef.current = idx;
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    setOverIdx(idx);
+  };
+
+  const handleDrop = (idx: number) => {
+    const from = dragRef.current;
+    if (from === null || from === idx) {
+      setDragIdx(null);
+      setOverIdx(null);
+      return;
+    }
+    const newStops = [...stops];
+    const [moved] = newStops.splice(from, 1);
+    newStops.splice(idx, 0, moved);
+    onReorder(newStops);
+    setDragIdx(null);
+    setOverIdx(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIdx(null);
+    setOverIdx(null);
+  };
 
   const finalLink = buildGoogleMapsLink(stops);
 
@@ -100,13 +132,25 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
         <span>~{totalDistance.toFixed(1)} km {lang === 'ar' ? 'مسافة مباشرة' : 'straight-line'}</span>
       </div>
 
-      {/* Reorderable stop list */}
+      {/* Draggable stop list */}
       <div className="space-y-1 max-h-64 overflow-y-auto">
         {stops.map((stop, idx) => (
           <div
             key={`${stop.linkIdx}-${stop.type}-${idx}`}
-            className="flex items-center gap-2 p-2 rounded-lg border border-border bg-muted/30 text-xs"
+            draggable
+            onDragStart={() => handleDragStart(idx)}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDrop={() => handleDrop(idx)}
+            onDragEnd={handleDragEnd}
+            className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-grab active:cursor-grabbing transition-colors ${
+              dragIdx === idx
+                ? 'opacity-50 border-primary bg-primary/10'
+                : overIdx === idx
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border bg-muted/30'
+            }`}
           >
+            <GripVertical className="w-3 h-3 text-muted-foreground shrink-0" />
             <span className="font-mono font-bold text-foreground w-5 shrink-0">{idx + 1}</span>
             <MapPin className={`w-3 h-3 shrink-0 ${stop.type === 'P' ? 'text-emerald-500' : 'text-destructive'}`} />
             <div className="flex-1 min-w-0">
@@ -117,26 +161,14 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
                   : `Person ${stop.linkIdx + 1} — ${stop.type === 'P' ? 'Pickup' : 'Dropoff'}`}
               </span>
             </div>
-            <div className="flex flex-col gap-0.5 shrink-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5"
-                disabled={idx === 0}
-                onClick={() => moveStop(idx, -1)}
-              >
-                <ArrowUp className="w-3 h-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5"
-                disabled={idx === stops.length - 1}
-                onClick={() => moveStop(idx, 1)}
-              >
-                <ArrowDown className="w-3 h-3" />
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0 hover:bg-destructive/10"
+              onClick={() => deleteStop(idx)}
+            >
+              <Trash2 className="w-3 h-3 text-destructive" />
+            </Button>
           </div>
         ))}
       </div>
@@ -157,8 +189,8 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
         </div>
         <p className="text-xs text-muted-foreground">
           {lang === 'ar'
-            ? 'استخدم الأسهم أعلاه لتغيير ترتيب المحطات يدوياً — الخريطة والرابط يتحدثان تلقائياً'
-            : 'Use the arrows above to manually reorder stops — map and link update automatically'}
+            ? 'اسحب المحطات لتغيير الترتيب أو احذفها — الخريطة والرابط يتحدثان تلقائياً'
+            : 'Drag stops to reorder or delete them — map and link update automatically'}
         </p>
       </div>
     </div>
