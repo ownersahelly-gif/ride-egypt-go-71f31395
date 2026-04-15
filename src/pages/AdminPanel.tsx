@@ -2206,31 +2206,17 @@ const AdminPanel = () => {
                       return;
                     }
                     try {
-                      // Lookup FCM token
-                      const { data: tokenRow, error: tokenErr } = await supabase
-                        .from('device_tokens')
-                        .select('token')
-                        .eq('user_id', userIdInput)
-                        .order('updated_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-
-                      if (tokenErr || !tokenRow?.token) {
-                        toast.error(lang === 'ar' ? 'لا يوجد رمز FCM لهذا المستخدم' : 'No FCM token found for this user');
-                        return;
-                      }
-
-                      const randomTripId = crypto.randomUUID().slice(0, 8);
+                      const randomTripId = crypto.randomUUID();
                       const { data: callRes, error: callErr } = await supabase.functions.invoke('initiate-call', {
                         body: {
-                          riderFcmToken: tokenRow.token,
-                          driverName: 'Admin Test',
+                          recipientUserId: userIdInput,
+                          callerName: 'Admin Test',
                           tripId: randomTripId,
                         },
                       });
 
-                      if (callErr) {
-                        toast.error(`Call failed: ${callErr.message}`);
+                      if (callErr || callRes?.error) {
+                        toast.error(callRes?.error || callErr?.message || (lang === 'ar' ? 'فشل إرسال المكالمة' : 'Call failed'));
                       } else {
                         toast.success(lang === 'ar' ? 'تم إرسال إشعار المكالمة!' : 'Call notification sent!');
                       }

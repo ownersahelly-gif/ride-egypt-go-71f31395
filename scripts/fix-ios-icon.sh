@@ -14,6 +14,7 @@ if [ ! -d "$SRC" ]; then
   exit 0
 fi
 
+rm -rf "$DEST"
 mkdir -p "$DEST"
 
 # Ensure root Contents.json exists (Xcode requires it)
