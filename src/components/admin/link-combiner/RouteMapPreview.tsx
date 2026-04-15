@@ -171,6 +171,16 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
     setOverIdx(null);
   };
 
+  const handleNumberSubmit = (fromIdx: number) => {
+    const target = parseInt(editValue, 10) - 1;
+    setEditingIdx(null);
+    if (isNaN(target) || target < 0 || target >= stops.length || target === fromIdx) return;
+    const newStops = [...stops];
+    const [moved] = newStops.splice(fromIdx, 1);
+    newStops.splice(target, 0, moved);
+    onReorder(newStops);
+  };
+
   const finalLink = useMemo(() => buildGoogleMapsLink(stops), [stops]);
 
   const copyLink = () => {
