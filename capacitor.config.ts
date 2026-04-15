@@ -23,9 +23,9 @@ const config: CapacitorConfig = {
   },
   plugins: {
     Keyboard: {
-      resize: 'none',
-      resizeOnFullScreen: false,
-    },
+  resize: 'ionic',
+  resizeOnFullScreen: true,
+},
   },
 
 export default config;
