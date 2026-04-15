@@ -725,6 +725,11 @@ const Dashboard = () => {
       style={{
         paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))',
         paddingTop: 'env(safe-area-inset-top, 0px)',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
       }}
     >
       <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0 z-10">
