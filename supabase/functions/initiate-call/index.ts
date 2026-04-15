@@ -50,8 +50,12 @@ Deno.serve(async (req) => {
 
       if (!resolvedToken) {
         return new Response(
-          JSON.stringify({ error: 'No device token found for recipient user' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            success: false,
+            code: 'missing_device_token',
+            error: 'No device token found for recipient user',
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
     }

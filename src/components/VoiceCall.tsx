@@ -61,7 +61,7 @@ const VoiceCall = ({ tripId, userId }: VoiceCallProps) => {
         }
       }
 
-      const { error: pushError } = await supabase.functions.invoke('initiate-call', {
+      const { data: pushData, error: pushError } = await supabase.functions.invoke('initiate-call', {
         body: {
           recipientUserId: userId,
           driverName: callerName,
@@ -69,8 +69,13 @@ const VoiceCall = ({ tripId, userId }: VoiceCallProps) => {
         },
       });
 
-      if (pushError) {
-        toast.error(pushError.message || 'Failed to notify recipient');
+      if (pushError || pushData?.success === false) {
+        const errMsg = pushData?.error || pushError?.message || 'Failed to notify recipient';
+        toast.error(
+          errMsg.includes('No device token')
+            ? 'Recipient must open the native app and allow notifications first'
+            : errMsg
+        );
         return;
       }
 
