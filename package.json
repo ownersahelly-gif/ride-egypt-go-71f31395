@@ -16,6 +16,7 @@
     "postbuild": "bash scripts/fix-ios-icon.sh"
   },
   "dependencies": {
+    "@capacitor-firebase/messaging": "^8.2.0",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
     "@capacitor/geolocation": "^8.2.0",
