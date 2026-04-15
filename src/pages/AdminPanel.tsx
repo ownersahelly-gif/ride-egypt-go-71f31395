@@ -2312,6 +2312,7 @@ const AdminPanel = () => {
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
                         <th className="text-start p-3 font-medium text-muted-foreground">{lang === 'ar' ? 'الاسم' : 'Name'}</th>
+                        <th className="text-start p-3 font-medium text-muted-foreground">{lang === 'ar' ? 'معرف المستخدم' : 'User ID'}</th>
                         <th className="text-start p-3 font-medium text-muted-foreground">{lang === 'ar' ? 'الهاتف' : 'Phone'}</th>
                         <th className="text-start p-3 font-medium text-muted-foreground">{lang === 'ar' ? 'النوع' : 'Type'}</th>
                         <th className="text-start p-3 font-medium text-muted-foreground">{lang === 'ar' ? 'تاريخ التسجيل' : 'Joined'}</th>
@@ -2322,6 +2323,19 @@ const AdminPanel = () => {
                       {filteredUsers.map((p: any) => (
                         <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/20">
                           <td className="p-3 font-medium text-foreground">{p.full_name || '—'}</td>
+                          <td className="p-3">
+                            <button
+                              className="flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+                              onClick={() => {
+                                navigator.clipboard.writeText(p.user_id);
+                                toast.success(lang === 'ar' ? 'تم نسخ المعرف' : 'User ID copied');
+                              }}
+                              title={p.user_id}
+                            >
+                              {p.user_id.slice(0, 8)}…
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </td>
                           <td className="p-3 text-muted-foreground">{p.phone || '—'}</td>
                           <td className="p-3">
                             <span className={`text-xs px-2 py-0.5 rounded-full ${p.user_type === 'admin' ? 'bg-primary/10 text-primary' : p.user_type === 'driver' ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
