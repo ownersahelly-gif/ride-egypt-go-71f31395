@@ -35,6 +35,9 @@
     --ring: 220 80% 20%;
 
     --radius: 0.75rem;
+    --vv-offset-top: 0px;
+    --vv-keyboard-inset: 0px;
+    --app-height: 100dvh;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -121,9 +124,10 @@
 
   #root {
     width: 100%;
-    height: 100%;
+    height: var(--app-height);
+    min-height: var(--app-height);
     overflow: hidden;
-    min-height: 100dvh;
+    background-color: hsl(var(--background));
   }
 
   a,
