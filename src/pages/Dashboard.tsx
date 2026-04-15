@@ -722,9 +722,12 @@ const Dashboard = () => {
   return (
     <div
       className="h-[100dvh] flex flex-col overflow-hidden"
-      style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+      style={{
+        paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))',
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+      }}
     >
-      <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0 z-10 safe-area-top">
+      <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0 z-10">
         <div className="flex items-center gap-2">
           <Link to="/" className="text-xl font-bold text-primary font-arabic">
             {appName}
