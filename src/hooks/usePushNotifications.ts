@@ -8,11 +8,13 @@ import { useAuth } from '@/contexts/AuthContext';
  */
 export const usePushNotifications = () => {
   const { user } = useAuth();
+  const setupDone = useRef(false);
 
   useEffect(() => {
     if (!user) return;
+    if (setupDone.current) return;
+    setupDone.current = true;
 
-    let cancelled = false;
     let removeListeners: Array<() => Promise<void> | void> = [];
 
     const setup = async () => {
