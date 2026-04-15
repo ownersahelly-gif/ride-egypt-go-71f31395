@@ -16,8 +16,14 @@ const BottomNav = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-50 bg-card border-t border-border safe-area-bottom" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-      <div className="flex items-center justify-around h-16">
+    <nav
+      className="fixed bottom-0 inset-x-0 z-50 border-t border-border bg-card/95 backdrop-blur-sm"
+      style={{
+        height: 'calc(4rem + env(safe-area-inset-bottom, 0px))',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
+    >
+      <div className="grid h-full grid-cols-5">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path || location.pathname.startsWith(tab.path + '/');
           const Icon = tab.icon;
@@ -27,12 +33,13 @@ const BottomNav = () => {
               key={tab.path}
               to={tab.path}
               onDoubleClick={isHome ? (e) => { e.preventDefault(); navigate('/admin'); } : undefined}
-              className={`flex flex-col items-center gap-0.5 px-2 py-1.5 transition-colors ${
+              aria-current={isActive ? 'page' : undefined}
+              className={`flex h-full min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2 transition-colors active:scale-[0.98] ${
                 isActive ? 'text-primary' : 'text-muted-foreground'
               }`}
             >
               <Icon className="w-5 h-5" />
-              <span className="text-[10px] font-medium">{lang === 'ar' ? tab.labelAr : tab.labelEn}</span>
+              <span className="text-[10px] font-medium leading-none">{lang === 'ar' ? tab.labelAr : tab.labelEn}</span>
             </Link>
           );
         })}

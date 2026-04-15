@@ -86,6 +86,12 @@ const Dashboard = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [drivingDistanceKm, setDrivingDistanceKm] = useState<number | null>(null);
+  const [showMap, setShowMap] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowMap(true), 250);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Compute real driving distance between pickup & dropoff
   useEffect(() => {
@@ -109,14 +115,14 @@ const Dashboard = () => {
     ? Math.max(10, Math.round(drivingDistanceKm * pricePerKm))
     : null;
 
-  // Fetch settings (always), user profile (if logged in)
+  // Fetch settings from cache/hook
   useEffect(() => {
-    // Always fetch price
-    supabase.from('app_settings').select('value').eq('key', 'price_per_km').single()
-      .then(({ data }) => { if (data?.value) setPricePerKm(parseFloat(data.value)); });
-    supabase.from('app_settings').select('value').eq('key', 'instapay_phone').single()
-      .then(({ data }) => { if (data) setInstapayPhone(data.value); });
+    if (settings.price_per_km) setPricePerKm(parseFloat(settings.price_per_km));
+    setInstapayPhone(settings.instapay_phone || '');
+  }, [settings.instapay_phone, settings.price_per_km]);
 
+  // Fetch user profile (if logged in)
+  useEffect(() => {
     if (!user) return;
     const fetchUserData = async () => {
       const [{ data: profileData }, { data: rolesData }, { data: partnerData }] = await Promise.all([
@@ -139,7 +145,7 @@ const Dashboard = () => {
       if (driverFlag) { navigate('/driver-dashboard'); return; }
     };
     fetchUserData();
-  }, [user]);
+  }, [navigate, user]);
 
   // Date options
   const getDateOptions = () => {
@@ -756,17 +762,26 @@ const Dashboard = () => {
         </Link>
       )}
 
-      <div className="flex-1 min-h-0 relative">
-        <MapView
-          className="h-full w-full rounded-none"
-          markers={mapMarkers}
-          origin={step === 'details' && selectedRide?.routes ? { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng } : (pickup && dropoff ? pickup : undefined)}
-          destination={step === 'details' && selectedRide?.routes ? { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng } : (pickup && dropoff ? dropoff : undefined)}
-          waypoints={step === 'details' && selectedRide?.routes ? routeStops.map((s: any) => ({ lat: s.lat, lng: s.lng })) : []}
-          showDirections={step === 'details' ? !!selectedRide?.routes : (!!pickup && !!dropoff)}
-          zoom={12}
-          showUserLocation
-        />
+      <div className="flex-1 min-h-0 relative bg-muted">
+        {showMap ? (
+          <MapView
+            className="h-full w-full rounded-none"
+            markers={mapMarkers}
+            origin={step === 'details' && selectedRide?.routes ? { lat: selectedRide.routes.origin_lat, lng: selectedRide.routes.origin_lng } : (pickup && dropoff ? pickup : undefined)}
+            destination={step === 'details' && selectedRide?.routes ? { lat: selectedRide.routes.destination_lat, lng: selectedRide.routes.destination_lng } : (pickup && dropoff ? dropoff : undefined)}
+            waypoints={step === 'details' && selectedRide?.routes ? routeStops.map((s: any) => ({ lat: s.lat, lng: s.lng })) : []}
+            showDirections={step === 'details' ? !!selectedRide?.routes : (!!pickup && !!dropoff)}
+            zoom={12}
+            showUserLocation
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+            <div className="flex items-center gap-2 text-sm">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span>{lang === 'ar' ? 'جاري تجهيز الخريطة...' : 'Preparing map...'}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="shrink-0 overflow-y-auto bg-card border-t border-border pb-6" style={{ maxHeight: '50dvh' }}>

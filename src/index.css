@@ -5,11 +5,6 @@
 @tailwind utilities;
 
 @layer base {
-  /* Fix iOS WebView 300ms tap delay */
-  *, *::before, *::after {
-    touch-action: manipulation;
-  }
-
   :root {
     --background: 0 0% 100%;
     --foreground: 220 20% 10%;
@@ -101,14 +96,13 @@
   html, body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', sans-serif;
-    overflow: hidden;
-    position: fixed;
     width: 100%;
     height: 100%;
-    -webkit-overflow-scrolling: touch;
     -webkit-text-size-adjust: 100%;
     overscroll-behavior: none;
-    touch-action: manipulation;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    -webkit-tap-highlight-color: transparent;
   }
 
   @supports (-webkit-touch-callout: none) {
@@ -124,7 +118,7 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    touch-action: manipulation;
+    min-height: 100dvh;
   }
 
   a,
