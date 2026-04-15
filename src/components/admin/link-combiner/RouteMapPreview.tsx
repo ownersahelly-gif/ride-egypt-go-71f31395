@@ -362,6 +362,36 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
         ))}
       </div>
 
+      {/* Add stop button */}
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant={addingStop ? 'default' : 'outline'}
+          onClick={() => setAddingStop(!addingStop)}
+          className="gap-1.5"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          {addingStop
+            ? (lang === 'ar' ? 'إلغاء' : 'Cancel')
+            : (lang === 'ar' ? 'إضافة محطة' : 'Add Stop')}
+        </Button>
+        {addingStop && (
+          <div className="flex items-center gap-1 text-xs">
+            <button
+              onClick={() => setAddStopType('P')}
+              className={`px-2 py-0.5 rounded ${addStopType === 'P' ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground'}`}
+            >
+              {lang === 'ar' ? 'التقاط' : 'Pickup'}
+            </button>
+            <button
+              onClick={() => setAddStopType('D')}
+              className={`px-2 py-0.5 rounded ${addStopType === 'D' ? 'bg-destructive text-white' : 'bg-muted text-muted-foreground'}`}
+            >
+              {lang === 'ar' ? 'توصيل' : 'Dropoff'}
+            </button>
+          </div>
+        )}
+      </div>
       {/* Save & Final link */}
       <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-3">
         <p className="text-sm font-semibold text-primary">
