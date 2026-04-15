@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,7 +6,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import MapView from '@/components/MapView';
+const MapView = lazy(() => import('@/components/MapView'));
 import PlacesAutocomplete from '@/components/PlacesAutocomplete';
 import BottomNav from '@/components/BottomNav';
 import {
@@ -87,11 +87,20 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [drivingDistanceKm, setDrivingDistanceKm] = useState<number | null>(null);
   const [showMap, setShowMap] = useState(false);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
 
+  // Only load MapView when the map area is visible on screen
   useEffect(() => {
-    const timer = window.setTimeout(() => setShowMap(true), 250);
-    return () => window.clearTimeout(timer);
-  }, []);
+    if (showMap) return;
+    const el = mapContainerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setShowMap(true); observer.disconnect(); } },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showMap]);
 
   // Compute real driving distance between pickup & dropoff
   useEffect(() => {
