@@ -103,6 +103,11 @@
     overflow-x: hidden;
     overflow-y: hidden;
     -webkit-tap-highlight-color: transparent;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
   }
 
   @supports (-webkit-touch-callout: none) {
