@@ -259,7 +259,7 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
             {lang === 'ar' ? 'جارِ تحميل المسار...' : 'Loading route...'}
           </div>
         )}
-        {addingStop && (
+        {addingStop && addStopMode === 'map' && (
           <div className="absolute top-2 right-2 z-10 bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-medium animate-pulse">
             {lang === 'ar' ? 'انقر على الخريطة لإضافة محطة' : 'Click on the map to add a stop'}
           </div>
