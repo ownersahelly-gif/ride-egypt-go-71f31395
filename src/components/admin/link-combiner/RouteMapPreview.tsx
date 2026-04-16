@@ -159,6 +159,29 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
     toast.success(lang === 'ar' ? 'تم حذف المحطة' : 'Stop removed');
   }, [stops, onReorder, lang]);
 
+  const handleAddViaLink = useCallback(async () => {
+    const trimmed = linkInput.trim();
+    if (!trimmed) return;
+    setLinkParsing(true);
+    try {
+      const parsed = await parseGoogleMapsLink(trimmed);
+      if (!parsed) throw new Error('Could not parse link');
+      const maxLinkIdx = stops.length > 0 ? Math.max(...stops.map(s => s.linkIdx)) + 1 : 0;
+      const newStops: OrderedStop[] = [
+        ...stops,
+        { lat: parsed.origin.lat, lng: parsed.origin.lng, name: parsed.origin.name, linkIdx: maxLinkIdx, type: 'P' },
+        { lat: parsed.destination.lat, lng: parsed.destination.lng, name: parsed.destination.name, linkIdx: maxLinkIdx, type: 'D' },
+      ];
+      onReorder(newStops);
+      setLinkInput('');
+      setAddingStop(false);
+      toast.success(lang === 'ar' ? 'تمت إضافة محطتين من الرابط' : 'Added pickup & dropoff from link');
+    } catch (err: any) {
+      toast.error(err.message || (lang === 'ar' ? 'تعذر تحليل الرابط' : 'Could not parse link'));
+    }
+    setLinkParsing(false);
+  }, [linkInput, stops, onReorder, lang]);
+
   const handleDragStart = (idx: number) => {
     setDragIdx(idx);
     dragRef.current = idx;
