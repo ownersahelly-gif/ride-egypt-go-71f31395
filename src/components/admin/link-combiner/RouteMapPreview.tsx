@@ -142,7 +142,7 @@ const RouteMapPreview = ({ stops, onReorder, lang }: Props) => {
   }, [stops, onReorder, lang]);
 
   const handleMapClick = useCallback(async (e: google.maps.MapMouseEvent) => {
-    if (!addingStop || !e.latLng) return;
+    if (!addingStop || addStopMode !== 'map' || !e.latLng) return;
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
     const name = await reverseGeocode(lat, lng);
